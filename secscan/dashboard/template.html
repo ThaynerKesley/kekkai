@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="__SECSCAN_THEME__">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kekkai</title>
+  <link rel="icon" href="__KEKKAI_ICON__">
+  <style>__SECSCAN_STYLE__</style>
+</head>
+<body class="__SECSCAN_EMBEDDED__">
+  <aside class="report-nav" aria-label="Navegação do relatório">
+    <div class="nav-brand"><img class="brand-image" src="__KEKKAI_WORDMARK__" alt="Kekkai"></div>
+    <p class="nav-caption">Security workspace</p>
+    <a href="#banner" class="active">Visão geral</a><a href="#cards">Scanners</a><a href="#findings">Findings</a>
+    <a href="#owasp-mapping">OWASP Top 10</a><a href="#performance">Performance</a><a href="#trivy-database">Trivy Database</a><a href="#policy">Policy</a>
+    <div class="nav-credit">DESENVOLVIDO POR<br><strong>Thayner Kesley</strong><br>Relatório offline · Kekkai</div>
+  </aside>
+  <div class="page">
+    <header class="top">
+      <div>
+        <p class="brand">KEKKAI</p>
+        <h1 id="project-name">Kekkai</h1>
+        <p class="meta" id="meta"></p>
+      </div>
+      <button class="theme" id="theme" type="button">Tema escuro</button>
+    </header>
+    <section class="banner" id="banner"></section>
+    <section class="stats" id="stats"></section>
+    <section class="charts" id="charts" aria-label="Gráficos do scan"></section>
+    <section class="panel" id="insights"></section>
+    <section class="cards" id="cards"></section>
+    <div class="toolbar" id="filters"></div>
+    <div class="toolbar" id="scanner-filters"></div>
+    <div class="filter-section">
+      <input class="search" id="search" type="search" aria-label="Buscar findings" placeholder="Buscar por CVE, arquivo, regra ou endpoint">
+      <select class="grouping" id="grouping" aria-label="Agrupar findings"><option value="priority">Por prioridade</option><option value="severity">Por severidade</option><option value="scanner">Por scanner</option></select>
+      <select class="grouping" id="view" aria-label="Visão do relatório"><option value="executive">Visão executiva</option><option value="technical">Visão técnica</option></select>
+    </div>
+    <div id="findings"></div>
+    <section class="panel" id="performance"></section>
+    <section class="panel" id="owasp-mapping"></section>
+    <section class="panel" id="trivy-database"></section>
+    <section class="panel" id="executed"></section>
+    <section class="panel" id="policy"></section>
+    <footer>Kekkai · Créditos: Thayner Kesley · Relatório offline, autocontido e sanitizado.</footer>
+  </div>
+  <script type="application/json" id="secscan-summary">__SECSCAN_SUMMARY__</script>
+  <script>
+    (function () {
+      var summaryNode = document.getElementById("secscan-summary");
+      var summary;
+      try {
+        summary = JSON.parse(summaryNode.textContent);
+      } catch (error) {
+        document.body.textContent = "Não foi possível ler o relatório embutido.";
+        return;
+      }
+
+      var scannerOrder = ["semgrep", "gitleaks", "sca", "yara", "owasp", "zap", "ai"];
+      var scannerNames = {semgrep: "Semgrep", gitleaks: "Gitleaks", sca: "SCA", yara: "YARA Rules", owasp: "OWASP Top 10", zap: "ZAP", ai: "AI Security Review"};
+      var state = { filter: "all", scanner: "all", query: "", group: "priority", view: "executive" };
+      var statusText = { pass: "PASS", warn: "WARN", fail: "COMPLETED WITH ERROR", error: "ERROR", skipped: "SKIPPED" };
+      var resultText = { approved: "APROVADO", blocked: "BLOQUEADO", error: "ERRO", not_scanned: "AGUARDANDO SCAN" };
+      var headlines = {
+        approved: "Publicação liberada",
+        blocked: "Publicação bloqueada",
+        error: "Verificação incompleta"
+      };
+      var techLabels = {
+        check_id: "Rule ID",
+        rule_id: "Rule ID",
+        message: "Mensagem",
+        column: "Coluna",
+        end_line: "Linha final",
+        end_column: "Coluna final",
+        path: "Path",
+        metadata: "Metadata",
+        description: "Descrição original",
+        file: "Arquivo",
+        start_line: "Linha inicial",
+        match: "Trecho mascarado",
+        vulnerability_id: "CVE",
+        package: "Package",
+        installed_version: "Installed",
+        fixed_version: "Fixed",
+        severity: "Severity",
+        title: "Título técnico",
+        primary_url: "Referência",
+        target: "Target",
+        alert: "Alerta",
+        risk: "Risk",
+        confidence: "Confidence",
+        solution: "Solução",
+        reference: "Referência",
+        plugin_id: "Plugin ID",
+        urls: "URLs"
+      };
+
+      function el(tag, className, value) {
+        var node = document.createElement(tag);
+        if (className) node.className = className;
+        if (value != null && value !== "") node.textContent = String(value);
+        return node;
+      }
+
+      function clear(node) {
+        while (node.firstChild) node.removeChild(node.firstChild);
+      }
+
+      function formatWhen(value) {
+        var date = new Date(value);
+        if (Number.isNaN(date.getTime())) return String(value || "");
+        return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "medium" }).format(date);
+      }
+
+      function isWarning(finding) {
+        return !finding.blocking && finding.severity !== "INFO";
+      }
+
+      function isInfo(finding) {
+        return !finding.blocking && finding.severity === "INFO";
+      }
+
+      function matches(finding) {
+        if (state.scanner !== "all" && finding.scanner !== state.scanner && ((finding.technical || {}).also_detected_by || []).indexOf(state.scanner) === -1) return false;
+        if (state.filter === "blocking" && !finding.blocking) return false;
+        if (state.filter === "critical" && finding.severity !== "CRITICAL") return false;
+        if (state.filter === "high" && finding.severity !== "HIGH") return false;
+        if (state.filter === "medium" && finding.severity !== "MEDIUM") return false;
+        if (state.filter === "low" && finding.severity !== "LOW") return false;
+        if (state.filter === "warning" && !isWarning(finding)) return false;
+        if (state.query && JSON.stringify(finding).toLowerCase().indexOf(state.query) === -1) return false;
+        return true;
+      }
+
+      function addLabeled(parent, label, value) {
+        var line = el("p");
+        line.appendChild(el("strong", null, label + ": "));
+        line.appendChild(document.createTextNode(value || ""));
+        parent.appendChild(line);
+      }
+
+      function renderFinding(finding) {
+        var card = el("article", "finding");
+        card.appendChild(el("p", "eyebrow", (finding.scanner || "").toUpperCase() + " · " + (finding.severity || "")));
+        if (finding.ai_assisted) card.appendChild(el("p", "badge warn", "AI-assisted finding · Validar manualmente · Requires review"));
+        card.appendChild(el("h3", null, finding.title));
+        card.appendChild(el("p", "lead", finding.description));
+        addLabeled(card, "Impacto", finding.impact);
+        addLabeled(card, "Recomendação", finding.recommendation);
+        var details = document.createElement("details");
+        details.open = state.view === "technical";
+        details.appendChild(el("summary", null, "Ver detalhes técnicos"));
+        var list = document.createElement("dl");
+        var location = finding.location || {};
+        var rows = [];
+        if (location.file) rows.push(["Arquivo", location.file]);
+        if (location.line != null) rows.push(["Linha", String(location.line)]);
+        if (location.url) rows.push(["Endpoint", location.url]);
+        rows.push(["Scanner", finding.scanner || ""]);
+        var technical = finding.technical || {};
+        Object.keys(technical).forEach(function (key) {
+          var value = technical[key];
+          if (value == null || value === "" || (Array.isArray(value) && !value.length)) return;
+          var rendered = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+          rows.push([techLabels[key] || key, rendered]);
+        });
+        rows.forEach(function (row) {
+          list.appendChild(el("dt", null, row[0]));
+          list.appendChild(el("dd", null, row[1]));
+        });
+        details.appendChild(list);
+        card.appendChild(details);
+        return card;
+      }
+
+      function renderSection(title, items, emptyText) {
+        var section = el("section", "panel");
+        section.appendChild(el("h2", null, title));
+        if (!items.length) {
+          section.appendChild(el("p", "empty", emptyText));
+          return section;
+        }
+        items.forEach(function (finding) { section.appendChild(renderFinding(finding)); });
+        return section;
+      }
+
+      function cardLine(scanner, info) {
+        if (info.status === "skipped") return "Não executado";
+        if (info.status === "error" && !info.total_findings) return "Falha técnica";
+        var own = (summary.findings || []).filter(function (item) { return item.scanner === scanner; });
+        if (scanner === "gitleaks") {
+          var secrets = info.total_findings || 0;
+          return secrets + (secrets === 1 ? " segredo" : " segredos");
+        }
+        if (scanner === "zap" && info.status === "warn") {
+          var warnings = own.filter(function (item) { return item.severity !== "INFO"; }).length;
+          if (warnings) return warnings + (warnings === 1 ? " warning" : " warnings");
+        }
+        if (scanner === "sca") {
+          var highs = own.filter(function (item) { return item.severity === "HIGH"; }).length;
+          var criticals = own.filter(function (item) { return item.severity === "CRITICAL"; }).length;
+          if (highs && !criticals) return highs + " HIGH";
+          if (criticals && !highs) return criticals + " CRITICAL";
+        }
+        var total = info.total_findings || 0;
+        return total + (total === 1 ? " finding" : " findings");
+      }
+
+      function renderHeader() {
+        document.getElementById("project-name").textContent = summary.project || "Projeto";
+        document.title = "Kekkai — " + (summary.project || "Relatório");
+        var bits = summary.result === "not_scanned" ? ["Alvo " + (summary.target || "")] : ["Analisado em " + formatWhen(summary.timestamp), "Alvo " + (summary.target || "")];
+        if (summary.zap_target) bits.push("Aplicação " + summary.zap_target);
+        document.getElementById("meta").textContent = bits.join(" · ");
+        var banner = document.getElementById("banner");
+        clear(banner);
+        banner.className = "banner " + (summary.result || "");
+        banner.appendChild(el("p", "kicker", headlines[summary.result] || ""));
+        banner.appendChild(el("p", "result-word", resultText[summary.result] || summary.result));
+        banner.appendChild(el("p", "phrase", summary.message || ""));
+      }
+
+      function renderStats() {
+        var totals = summary.totals || {};
+        var host = document.getElementById("stats");
+        clear(host);
+        [
+          ["Problemas bloqueantes", totals.blocking || 0],
+          ["Avisos", totals.warning || 0],
+          ["Críticos", totals.critical || 0],
+          ["Altos", totals.high || 0]
+        ].forEach(function (item) {
+          var stat = el("article", "stat");
+          stat.appendChild(el("span", null, item[0]));
+          stat.appendChild(el("strong", null, String(item[1])));
+          host.appendChild(stat);
+        });
+      }
+
+      function renderCards() {
+        var host = document.getElementById("cards");
+        clear(host);
+        scannerOrder.forEach(function (scanner) {
+          var info = (summary.scanners || {})[scanner] || { status: "skipped", total_findings: 0 };
+          var card = document.createElement("button");
+          card.type = "button";
+          card.className = "card" + (state.scanner === scanner ? " active" : "");
+          card.appendChild(el("div", "eyebrow", scannerNames[scanner] || scanner));
+          card.appendChild(el("div", "badge " + info.status, statusText[info.status] || info.status));
+          card.appendChild(el("div", "count", cardLine(scanner, info)));
+          if (scanner === "sca") {
+            [ ["version_risk", "Version Risk"], ["license", "Licensing"] ].forEach(function (part) {
+              var area = info[part[0]] || {};
+              card.appendChild(el("div", "count", part[1] + ": " + (area.findings || 0) + " findings / " + (area.blocking || 0) + " bloqueantes / " + (area.warnings || 0) + " warnings"));
+              var counts = part[0] === "license" ? (area.classification_counts || {}) : (area.severity_counts || {});
+              card.appendChild(el("div", "count", Object.keys(counts).map(function (label) { return counts[label] + " " + label; }).join(" · ")));
+            });
+          }
+          card.appendChild(el("div", "count", Number(info.duration_seconds || 0).toFixed(1) + "s"));
+          if (info.error) card.appendChild(el("p", "empty", info.error));
+          card.addEventListener("click", function () {
+            state.scanner = state.scanner === scanner ? "all" : scanner;
+            render();
+          });
+          host.appendChild(card);
+        });
+      }
+
+      function renderButtons(host, options, current, onClick) {
+        clear(host);
+        options.forEach(function (option) {
+          var button = document.createElement("button");
+          button.type = "button";
+          button.textContent = option.label;
+          button.className = current === option.id ? "active" : "";
+          button.addEventListener("click", function () { onClick(option.id); });
+          host.appendChild(button);
+        });
+      }
+
+      function renderFindings() {
+        var findings = (summary.findings || []).filter(matches);
+        var host = document.getElementById("findings");
+        clear(host);
+        if (state.group !== "priority") {
+          var grouped = {};
+          findings.forEach(function (finding) {
+            var key = finding.scanner === "ai" ? "AI Security Review · Validar manualmente" : (state.group === "scanner" ? (scannerNames[finding.scanner] || finding.scanner) : finding.severity);
+            (grouped[key] = grouped[key] || []).push(finding);
+          });
+          Object.keys(grouped).forEach(function (key) { host.appendChild(renderSection(key + " (" + grouped[key].length + ")", grouped[key], "")); });
+          if (!findings.length) host.appendChild(renderSection("Findings", [], "Nenhum achado corresponde ao filtro."));
+          return;
+        }
+        var active = state.filter !== "all" || state.scanner !== "all" || state.query;
+        if (active) {
+          host.appendChild(renderSection("Resultados (" + findings.length + ")", findings, "Nenhum achado corresponde ao filtro."));
+          return;
+        }
+        var ai = findings.filter(function (item) { return item.scanner === "ai"; });
+        var yara = findings.filter(function (item) { return item.scanner === "yara"; });
+        findings = findings.filter(function (item) { return item.scanner !== "ai" && item.scanner !== "yara"; });
+        host.appendChild(renderSection("YARA Matches", yara, "Nenhum match YARA nesta execução."));
+        host.appendChild(renderSection("AI Security Review · Requires review", ai, "IA não executada ou nenhum finding retornado. Findings de IA exigem validação manual."));
+        host.appendChild(renderSection("O que está bloqueando a publicação?", findings.filter(function (item) { return item.blocking; }), "Nenhum problema bloqueante foi identificado."));
+        host.appendChild(renderSection("Avisos", findings.filter(isWarning), "Nenhum aviso."));
+        host.appendChild(renderSection("Informações", findings.filter(isInfo), "Nenhuma informação adicional."));
+      }
+
+      function renderExecuted() {
+        var section = document.getElementById("executed");
+        clear(section);
+        section.appendChild(el("h2", null, "Scanners executados"));
+        var table = document.createElement("table");
+        var head = document.createElement("tr");
+        ["Scanner", "Status", "Total", "Bloqueantes", "Não bloqueantes", "Detalhe"].forEach(function (label) {
+          head.appendChild(el("th", null, label));
+        });
+        table.appendChild(head);
+        scannerOrder.forEach(function (scanner) {
+          var info = (summary.scanners || {})[scanner] || {};
+          var row = document.createElement("tr");
+          var name = scannerNames[scanner] || scanner;
+          [name, statusText[info.status] || info.status, info.total_findings || 0, info.blocking_findings || 0, info.warning_findings || 0, info.error || ""].forEach(function (value) {
+            row.appendChild(el("td", null, String(value)));
+          });
+          table.appendChild(row);
+        });
+        section.appendChild(table);
+      }
+
+      function svgNode(tag, attrs, text) {
+        var node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+        Object.keys(attrs || {}).forEach(function (key) { node.setAttribute(key, attrs[key]); });
+        if (text != null) node.textContent = String(text);
+        return node;
+      }
+      function chartPanel(title, label) {
+        var card = el("article", "chart-panel");
+        card.appendChild(el("h2", null, title));
+        var svg = svgNode("svg", {viewBox: "0 0 340 210", role: "img", "aria-label": label});
+        card.appendChild(svg);
+        document.getElementById("charts").appendChild(card);
+        return {card: card, svg: svg};
+      }
+      function renderCharts() {
+        clear(document.getElementById("charts"));
+        var counts = (summary.totals || {});
+        var warnCount = (summary.findings || []).filter(function(item) { return item.severity === "WARN"; }).length;
+        var severity = [["Critical", counts.critical || 0], ["High", counts.high || 0], ["Medium", counts.medium || 0], ["Low", counts.low || 0], ["Warn", warnCount], ["Info", counts.info || 0]];
+        var distribution = chartPanel("Findings por severidade", severity.map(function(x) {return x[0] + ": " + x[1];}).join(", "));
+        var maximum = Math.max.apply(null, severity.map(function (x) {return x[1];}).concat([1]));
+        [0, 1, 2, 3].forEach(function (index) {
+          var y = 155 - index * 42;
+          distribution.svg.appendChild(svgNode("line", {x1: 28, y1: y, x2: 328, y2: y, class: "chart-grid"}));
+        });
+        severity.forEach(function (item, index) {
+          var height = item[1] / maximum * 120;
+          var position = 40 + index * (290 / severity.length);
+          distribution.svg.appendChild(svgNode("rect", {x: position, y: 155 - height, width: 27, height: Math.max(1, height), rx: 5, fill: "var(--chart-" + (index % 4 + 1) + ")"}));
+          distribution.svg.appendChild(svgNode("text", {x: position + 13.5, y: 180, "text-anchor": "middle", class: "chart-text"}, item[0]));
+          distribution.svg.appendChild(svgNode("text", {x: position + 13.5, y: 146 - height, "text-anchor": "middle", class: "chart-text"}, item[1]));
+        });
+        var disposition = chartPanel("Decisão de publicação", "Bloqueantes: " + (counts.blocking || 0) + ", não bloqueantes: " + ((counts.total || 0) - (counts.blocking || 0)));
+        var total = counts.total || 0;
+        var segments = [counts.blocking || 0, Math.max(0, total - (counts.blocking || 0) - (counts.info || 0)), counts.info || 0];
+        var offset = 0;
+        disposition.svg.appendChild(svgNode("circle", {cx: 170, cy: 97, r: 66, fill: "none", stroke: "var(--border)", "stroke-width": 21}));
+        segments.forEach(function (value, index) {
+          var length = total ? value / total * 414.69 : 0;
+          disposition.svg.appendChild(svgNode("circle", {cx: 170, cy: 97, r: 66, fill: "none", stroke: "var(--chart-" + (index + 1) + ")", "stroke-width": 21, "stroke-dasharray": length + " 414.69", "stroke-dashoffset": -offset, transform: "rotate(-90 170 97)"}));
+          offset += length;
+        });
+        disposition.svg.appendChild(svgNode("text", {x: 170, y: 101, "text-anchor": "middle", class: "chart-value"}, total));
+        disposition.svg.appendChild(svgNode("text", {x: 170, y: 124, "text-anchor": "middle", class: "chart-text"}, "findings"));
+        var legend = el("div", "legend");
+        ["Bloqueantes", "Avisos", "Informações"].forEach(function (label) {legend.appendChild(el("span", null, label));});
+        disposition.card.appendChild(legend);
+        var performance = chartPanel("Tempo por scanner", "Duração real de cada scanner, em segundos");
+        var durations = scannerOrder.map(function (name) { return Number(((summary.scanners || {})[name] || {}).duration_seconds || 0); });
+        var scale = Math.max.apply(null, durations.concat([1]));
+        scannerOrder.forEach(function (name, index) {
+          var y = 8 + index * 27;
+          performance.svg.appendChild(svgNode("text", {x: 0, y: y + 13, class: "chart-text"}, name === "ai" ? "AI Review" : (name === "owasp" ? "OWASP" : scannerNames[name])));
+          performance.svg.appendChild(svgNode("rect", {x: 89, y: y + 2, width: Math.max(1, durations[index] / scale * 190), height: 12, rx: 4, fill: "var(--chart-" + (index % 2 + 1) + ")"}));
+          performance.svg.appendChild(svgNode("text", {x: 334, y: y + 13, "text-anchor": "end", class: "chart-text"}, durations[index].toFixed(1) + "s"));
+        });
+        var insights = document.getElementById("insights");
+        clear(insights);
+        insights.appendChild(el("h2", null, "Leitura executiva"));
+        var errors = scannerOrder.filter(function(name) { return ((summary.scanners || {})[name] || {}).status === "error"; });
+        var text = errors.length ? "Verificação incompleta: " + errors.map(function(name) {return scannerNames[name];}).join(", ") + ". Resolva a execução antes de avaliar a publicação." :
+          (counts.blocking ? counts.blocking + " finding(s) bloqueiam a publicação segundo a policy. Priorize os bloqueantes e confirme as correções com um novo scan." : "Nenhum bloqueio foi identificado pelas verificações executadas e pela policy aplicada. Revise avisos e scanners não executados.");
+        if (summary.result === "not_scanned") text = "Selecione os scanners e execute uma verificação para carregar os dados reais deste projeto.";
+        insights.appendChild(el("p", null, text));
+        var ai = (summary.scanners || {}).ai || {};
+        if (ai.total_findings) insights.appendChild(el("p", "empty", "Há " + ai.total_findings + " finding(s) assistidos por IA. Validação manual obrigatória."));
+      }
+
+      function dataTable(section, headers, rows) {
+        var table = el("table");
+        var head = el("tr");
+        headers.forEach(function (name) { head.appendChild(el("th", null, name)); });
+        table.appendChild(head);
+        rows.forEach(function (values) {
+          var row = el("tr");
+          values.forEach(function (value) { row.appendChild(el("td", null, String(value == null ? "—" : value))); });
+          table.appendChild(row);
+        });
+        section.appendChild(table);
+      }
+
+      function renderModules() {
+        var perf = document.getElementById("performance");
+        clear(perf);
+        perf.appendChild(el("h2", null, "Performance"));
+        var performance = summary.performance || {};
+        perf.appendChild(el("p", null, "Total: " + Number(performance.total_seconds || 0).toFixed(1) + "s · Perfil: " + (summary.profile || "full") + " · Limite: " + (performance.max_workers || 1)));
+        dataTable(perf, ["Scanner", "Tempo", "Executado em paralelo com"], scannerOrder.map(function (name) {
+          var info = (summary.scanners || {})[name] || {};
+          return [scannerNames[name], Number(info.duration_seconds || 0).toFixed(1) + "s", (info.parallel_with || []).map(function (other) {return scannerNames[other];}).join(", ") || "—"];
+        }));
+        var mapping = document.getElementById("owasp-mapping");
+        clear(mapping);
+        var owasp = (summary.scanners || {}).owasp || {};
+        mapping.appendChild(el("h2", null, "OWASP Top 10"));
+        mapping.appendChild(el("p", null, "Ruleset: " + (owasp.ruleset || "Não executado") + " · Edição: " + (owasp.edition || "Não determinada")));
+        mapping.appendChild(el("p", "empty", owasp.coverage_note || "Edição e regras são determinadas a partir do ruleset oficial selecionado."));
+        dataTable(mapping, ["Categoria", "Regras selecionadas", "Findings mapeados"], (owasp.categories || []).map(function (category) {
+          return [category.category, category.applicable_rules, category.findings];
+        }));
+        var db = document.getElementById("trivy-database");
+        clear(db);
+        var cache = summary.trivy_database;
+        db.appendChild(el("h2", null, "Trivy Database"));
+        if (cache) {
+          dataTable(db, ["Métrica", "Valor"], [
+            ["Mode", cache.mode], ["Cache size before", (Number(cache.cache_size_before || 0) / 1024 / 1024).toFixed(1) + " MB"],
+            ["Cache size after", (Number(cache.cache_size_after || 0) / 1024 / 1024).toFixed(1) + " MB"],
+            ["DB age", cache.db_age_hours == null ? "Indisponível" : cache.db_age_hours + "h"],
+            ["DB reused", cache.cache_hit ? "yes" : "no"], ["DB updated", cache.db_updated ? "yes" : "no"],
+            ["Download avoided", cache.download_avoided ? "yes" : "no"],
+            ["DB download/update check", Number(cache.trivy_db_download_seconds || 0).toFixed(1) + "s"],
+            ["Trivy scan", Number(cache.trivy_scan_seconds || 0).toFixed(1) + "s"]]);
+          (cache.cleanup_warnings || []).forEach(function (warning) { db.appendChild(el("p", "empty", warning)); });
+        } else db.appendChild(el("p", "empty", "Cache não utilizado nesta execução."));
+        db.appendChild(el("p", "empty", "Licensing: indicação de risco, não parecer jurídico. Bloqueios seguem a policy da organização."));
+        var ai = (summary.scanners || {}).ai || {};
+        var usage = ai.usage || {};
+        var cost = ai.cost;
+        var costText = cost ? "US$ " + Number(cost.minimum).toFixed(4) + "–" + Number(cost.maximum).toFixed(4) + " (estimativa)" : "indisponível; configure tarifas";
+        perf.appendChild(el("p", "empty", "AI: " + (ai.usage_status || "Cost unavailable") + " · Requests: " + (usage.requests || 0) + " · Input tokens: " + (usage.input_tokens || 0) + " · Output tokens: " + (usage.output_tokens || 0) + " · Custo: " + costText));
+        if (ai.groups_total) perf.appendChild(el("p", "empty", "IA: " + (ai.groups_completed || 0) + "/" + ai.groups_total + " grupos concluídos · " + (ai.partial ? "revisão parcial" : "revisão completa")));
+      }
+
+      function renderPolicy() {
+        var section = document.getElementById("policy");
+        clear(section);
+        section.appendChild(el("h2", null, "Policy aplicada"));
+        var details = document.createElement("details");
+        details.open = true;
+        details.appendChild(el("summary", null, "Ver configuração usada neste scan"));
+        var pre = document.createElement("pre");
+        pre.textContent = JSON.stringify(summary.policy || {}, null, 2);
+        details.appendChild(pre);
+        section.appendChild(details);
+      }
+
+      function render() {
+        renderHeader();
+        renderStats();
+        renderCharts();
+        renderCards();
+        renderButtons(document.getElementById("filters"), [
+          { id: "all", label: "Todos" },
+          { id: "blocking", label: "Bloqueantes" },
+          { id: "critical", label: "Critical" },
+          { id: "high", label: "High" },
+          { id: "medium", label: "Medium" },
+          { id: "low", label: "Low" },
+          { id: "warning", label: "Warning" }
+        ], state.filter, function (value) { state.filter = value; render(); });
+        renderButtons(document.getElementById("scanner-filters"), [
+          { id: "all", label: "Todos os scanners" },
+          { id: "semgrep", label: "Semgrep" },
+          { id: "gitleaks", label: "Gitleaks" },
+          { id: "sca", label: "SCA" },
+          { id: "yara", label: "YARA Rules" },
+          { id: "owasp", label: "OWASP" },
+          { id: "ai", label: "AI Security Review" },
+          { id: "zap", label: "ZAP" }
+        ], state.scanner, function (value) { state.scanner = value; render(); });
+        renderFindings();
+        renderExecuted();
+        renderModules();
+        renderPolicy();
+      }
+
+      var themeButton = document.getElementById("theme");
+      function applyTheme(theme) {
+        document.documentElement.setAttribute("data-theme", theme);
+        themeButton.textContent = theme === "dark" ? "Tema claro" : "Tema escuro";
+      }
+      var initial = "__SECSCAN_THEME__";
+      try {
+        initial = document.body.classList.contains("embedded") ? "__SECSCAN_THEME__" : (localStorage.getItem("secscan-theme") || "__SECSCAN_THEME__");
+      } catch (error) {
+        initial = "__SECSCAN_THEME__";
+      }
+      window.secscanSetTheme = applyTheme;
+      applyTheme(initial);
+      themeButton.addEventListener("click", function () {
+        var next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+        applyTheme(next);
+        try { localStorage.setItem("secscan-theme", next); } catch (error) {}
+      });
+      document.getElementById("search").addEventListener("input", function (event) {
+        state.query = event.target.value.trim().toLowerCase();
+        renderFindings();
+      });
+      document.getElementById("grouping").addEventListener("change", function(event) { state.group = event.target.value; renderFindings(); });
+      document.querySelectorAll(".report-nav a").forEach(function(link) { link.addEventListener("click", function() {
+        document.querySelectorAll(".report-nav a").forEach(function(other) { other.classList.toggle("active", other === link); });
+      }); });
+      document.getElementById("view").addEventListener("change", function(event) { state.view = event.target.value; renderFindings(); });
+      render();
+    }());
+  </script>
+</body>
+</html>

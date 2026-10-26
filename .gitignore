@@ -1,0 +1,42 @@
+# Local configuration and private scan artifacts
+.secscan.yml
+.security/
+.secscan/
+.codex/
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*.json
+secrets*.json
+
+# Historical local diagnostics, private screenshots and design references
+/VALIDATION*.md
+/vulnerable.py
+/secscan/desing/
+/secscan/assets/*.png
+!/secscan/assets/logo.png
+!/secscan/assets/logo+nome.png
+
+# Python environments, build outputs and editor files
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+.idea/
+.vscode/
+*.log
+*.tmp
+*.zip
