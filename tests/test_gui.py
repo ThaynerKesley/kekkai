@@ -9,31 +9,31 @@ from unittest.mock import patch
 
 import yaml
 
-from secscan import configuration
-from secscan.core.storage import Preferences
+from kekkai import configuration
+from kekkai.core.storage import Preferences
 
 try:
     from PySide6.QtCore import Qt, QEventLoop, QTimer
     from PySide6.QtTest import QTest
     from PySide6.QtWidgets import QApplication, QLineEdit, QMessageBox, QFileDialog, QInputDialog
-    from secscan.gui.window import MainWindow, NAVIGATION
+    from kekkai.gui.window import MainWindow, NAVIGATION
     QT_AVAILABLE = True
 except ImportError:
     QT_AVAILABLE = False
 
 
-@unittest.skipUnless(QT_AVAILABLE, "Install requirements-gui.txt for desktop tests")
+@unittest.skipUnless(QT_AVAILABLE, "Install requirements.txt for desktop tests")
 class GuiTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
 
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory(prefix="secscan-qt-test-")
+        self.temp = tempfile.TemporaryDirectory(prefix="kekkai-qt-test-")
         self.root = Path(self.temp.name)
         self.config = deepcopy(configuration.DEFAULTS)
         self.config["policy"]["gitleaks"]["enabled"] = True
-        (self.root / ".secscan.yml").write_text(yaml.safe_dump(self.config), encoding="utf-8")
+        (self.root / ".kekkai.yml").write_text(yaml.safe_dump(self.config), encoding="utf-8")
         prefs = Preferences(self.root / "preferences.json")
         self.window = MainWindow(prefs, self.root)
         self.window.scan_page.open_dashboard.setChecked(False)
@@ -76,7 +76,7 @@ class GuiTests(unittest.TestCase):
         self.assertFalse(self.window.windowIcon().isNull())
 
     def test_english_navigation_forms_and_live_dashboard(self):
-        from secscan.i18n import set_language
+        from kekkai.i18n import set_language
         other=MainWindow(self.window.preferences,self.root,language='en')
         try:
             other.show()
@@ -99,7 +99,7 @@ class GuiTests(unittest.TestCase):
             other.close();other.deleteLater();self.app.processEvents();set_language('pt_BR')
 
     def test_report_deletion_requires_confirmation_and_preserves_history(self):
-        from secscan.core.service import run_scan
+        from kekkai.core.service import run_scan
         outcome=run_scan(self.root,deepcopy(configuration.DEFAULTS))
         self.window.scan_completed(outcome)
         reports=self.window.pages['reports']
@@ -111,7 +111,7 @@ class GuiTests(unittest.TestCase):
         self.assertFalse(current.exists())
         self.assertEqual(len(reports.entries),1)
         self.assertTrue(Path(reports.entries[0]['path']).is_file())
-        self.assertTrue((self.root/'.secscan.yml').is_file())
+        self.assertTrue((self.root/'.kekkai.yml').is_file())
 
     def test_web_project_choice_and_zap_callout(self):
         self.window.navigate('scan')
@@ -121,7 +121,7 @@ class GuiTests(unittest.TestCase):
         self.assertTrue(self.window.config['project']['web'])
         self.assertTrue(self.window.scan_page.zap_callout.isVisible())
         self.window.save_config()
-        self.assertTrue(yaml.safe_load((self.root/'.secscan.yml').read_text())['project']['web'])
+        self.assertTrue(yaml.safe_load((self.root/'.kekkai.yml').read_text())['project']['web'])
         self.window.scan_page.project_type.setCurrentIndex(0)
         self.assertFalse(self.window.scan_page.zap_callout.isVisible())
         self.assertFalse(self.window.scan_page.toggles['zap'].isEnabled())
@@ -131,14 +131,14 @@ class GuiTests(unittest.TestCase):
         with patch.object(QFileDialog,'getExistingDirectory',return_value=str(project)),patch.object(QInputDialog,'getItem',return_value=('Aplicação web',True)) as prompt:
             self.window.choose_project()
         prompt.assert_called_once()
-        self.assertTrue(yaml.safe_load((project/'.secscan.yml').read_text())['project']['web'])
+        self.assertTrue(yaml.safe_load((project/'.kekkai.yml').read_text())['project']['web'])
 
     def test_target_probe_and_ready_status(self):
         self.window.navigate('scan')
         self.window.config['policy']['zap'].update(enabled=True,target='http://localhost:4173')
         self.window.set_project_type(True)
         self.app.processEvents()
-        with patch('secscan.gui.worker.probe_zap_container',return_value={'reachable':True}),patch('secscan.gui.worker.test_target',return_value={'reachable':True,'http_status':403,'latency_ms':12}):
+        with patch('kekkai.gui.worker.probe_zap_container',return_value={'reachable':True}),patch('kekkai.gui.worker.test_target',return_value={'reachable':True,'http_status':403,'latency_ms':12}):
             QTest.mouseClick(self.window.scan_page.test_target,Qt.MouseButton.LeftButton)
             self.wait_for(lambda:not self.window.probes)
         self.assertIn('HTTP 403',self.window.scan_page.target_status.text())
@@ -149,7 +149,7 @@ class GuiTests(unittest.TestCase):
         fields=self.window.ai_page.providers['deepseek']
         fields['model'].setText('deepseek-flash');fields['key'].setText('UNIT_TEST_CREDENTIAL')
         response={'choices':[{'finish_reason':'stop','message':{'content':'{"ok":true}'}}]}
-        with patch('secscan.ai_providers.post_json',return_value=response) as post:
+        with patch('kekkai.ai_providers.post_json',return_value=response) as post:
             QTest.mouseClick(fields['test'],Qt.MouseButton.LeftButton)
             self.wait_for(lambda:not self.window.probes)
         self.assertIn('Conectado',fields['status'].text())
@@ -180,11 +180,11 @@ class GuiTests(unittest.TestCase):
         config = self.window.collect_config()
         self.assertNotIn("UNIT_TEST_CREDENTIAL", json.dumps(config))
         self.window.save_config()
-        self.assertNotIn("UNIT_TEST_CREDENTIAL", (self.root / ".secscan.yml").read_text())
+        self.assertNotIn("UNIT_TEST_CREDENTIAL", (self.root / ".kekkai.yml").read_text())
 
     def test_click_scan_offline_updates_status_and_reports(self):
         self.window.navigate("scan")
-        with patch("secscan.scanners.docker_preflight", return_value="Docker offline"):
+        with patch("kekkai.scanners.docker_preflight", return_value="Docker offline"):
             QTest.mouseClick(self.window.scan_page.start, Qt.MouseButton.LeftButton)
             self.wait_for(lambda: self.window.summary is not None and self.window.scan_page.start.isEnabled())
         self.assertEqual(self.window.summary["result"], "error")
@@ -225,8 +225,8 @@ class GuiTests(unittest.TestCase):
         self.window.toggle_scanner("ai", True)
         requests = []
         response = {"choices": [{"finish_reason": "stop", "message": {"content": '{"findings":[]}'}}], "usage": {"prompt_tokens": 10, "completion_tokens": 20}}
-        from secscan import secscan as engine
-        with patch.object(QMessageBox, "exec", return_value=QMessageBox.StandardButton.Yes) as dialog, patch("secscan.scanners.docker_preflight", return_value=None), patch("secscan.scanners.run_gitleaks", return_value=engine.make_result("gitleaks", "pass", 0, [])), patch("secscan.ai_providers.post_json", return_value=response) as post:
+        from kekkai import engine as engine
+        with patch.object(QMessageBox, "exec", return_value=QMessageBox.StandardButton.Yes) as dialog, patch("kekkai.scanners.docker_preflight", return_value=None), patch("kekkai.scanners.run_gitleaks", return_value=engine.make_result("gitleaks", "pass", 0, [])), patch("kekkai.ai_providers.post_json", return_value=response) as post:
             self.window.start_scan()
             self.window.worker.consent_requested.connect(requests.append)
             self.wait_for(lambda: self.window.summary is not None and not self.window.running())
@@ -246,7 +246,7 @@ class GuiTests(unittest.TestCase):
 
     def test_cancel_button_preserves_report(self):
         import time
-        from secscan import secscan as engine
+        from kekkai import engine as engine
         cancelled = []
         import threading
         started = threading.Event()
@@ -259,7 +259,7 @@ class GuiTests(unittest.TestCase):
                 time.sleep(.02)
             return engine.make_result("gitleaks", "pass", 0, [])
         self.window.navigate("scan")
-        with patch("secscan.scanners.docker_preflight", return_value=None), patch("secscan.scanners.run_gitleaks", side_effect=delayed):
+        with patch("kekkai.scanners.docker_preflight", return_value=None), patch("kekkai.scanners.run_gitleaks", side_effect=delayed):
             self.window.start_scan()
             self.wait_for(started.is_set)
             QTest.mouseClick(self.window.scan_page.cancel, Qt.MouseButton.LeftButton)
@@ -269,7 +269,7 @@ class GuiTests(unittest.TestCase):
         self.assertFalse((self.root / ".security/reports/summary.json").exists())
         self.assertTrue(self.window.scan_page.start.isEnabled())
 
-    @unittest.skipUnless(os.environ.get("SECSCAN_DOCKER_TESTS") == "1", "Real GUI scan opt-in")
+    @unittest.skipUnless(os.environ.get("KEKKAI_DOCKER_TESTS") == "1", "Real GUI scan opt-in")
     def test_real_gitleaks_started_by_gui_button(self):
         (self.root / "app.py").write_text("print('clean fixture')\n", encoding="utf-8")
         self.window.navigate("scan")

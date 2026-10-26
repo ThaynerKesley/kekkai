@@ -6,10 +6,10 @@ from copy import deepcopy
 from pathlib import Path
 from unittest.mock import patch
 
-from secscan import ai_review, configuration, runner
-from secscan import secscan as api
-from secscan.ai_providers import ProviderError
-from secscan.files import Exclusions, Sanitizer
+from kekkai import ai_review, configuration, runner
+from kekkai import engine as api
+from kekkai.ai_providers import ProviderError
+from kekkai.files import Exclusions, Sanitizer
 
 
 class AIContractTests(unittest.TestCase):
@@ -93,7 +93,7 @@ class AIContractTests(unittest.TestCase):
             root = Path(folder)
             (root/'app.py').write_text("print('PRIVATE_SOURCE_MARKER')\n", encoding='utf-8')
             (root/'guide.md').write_text('Use null for unknown cwe, owasp and line. Return JSON.', encoding='utf-8')
-            with patch('secscan.ai_providers.post_json', return_value=response) as post:
+            with patch('kekkai.ai_providers.post_json', return_value=response) as post:
                 result = ai_review.run_ai(api, root, options, Exclusions(root, []), api.make_result('gitleaks', 'pass', 0, []),
                                           Sanitizer(), True, 'full', interaction=Interaction())
             self.assertEqual(result['status'], 'warn')

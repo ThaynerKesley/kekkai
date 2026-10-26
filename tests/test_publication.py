@@ -4,15 +4,14 @@ import tempfile
 import unittest
 from copy import deepcopy
 from pathlib import Path
-from unittest.mock import patch
 
-from secscan import ai_review, configuration
-from secscan import secscan as engine
-from secscan.core.service import run_scan
-from secscan.core.storage import Preferences, ReportStore, save_project_config
-from secscan.dashboard import render
-from secscan.files import Exclusions, atomic_write_text, Sanitizer
-from secscan.i18n import get_language, set_language, tr
+from kekkai import ai_review, configuration
+from kekkai import engine as engine
+from kekkai.core.service import run_scan
+from kekkai.core.storage import Preferences, ReportStore, save_project_config
+from kekkai.dashboard import render
+from kekkai.files import Exclusions, atomic_write_text, Sanitizer
+from kekkai.i18n import get_language, set_language, tr
 
 
 class PublicationTests(unittest.TestCase):
@@ -47,11 +46,11 @@ class PublicationTests(unittest.TestCase):
     def test_settings_do_not_follow_preseeded_temporary_or_destination_links(self):
         victim=self.root/'private.txt';victim.write_text('KEEP')
         project=self.root/'project';project.mkdir()
-        self.link(project/'.secscan.yml.tmp',victim)
+        self.link(project/'.kekkai.yml.tmp',victim)
         save_project_config(project,deepcopy(configuration.DEFAULTS))
         self.assertEqual(victim.read_text(),'KEEP')
-        (project/'.secscan.yml').unlink()
-        self.link(project/'.secscan.yml',victim)
+        (project/'.kekkai.yml').unlink()
+        self.link(project/'.kekkai.yml',victim)
         with self.assertRaises(OSError):save_project_config(project,deepcopy(configuration.DEFAULTS))
         self.assertEqual(victim.read_text(),'KEEP')
 
@@ -92,7 +91,7 @@ class PublicationTests(unittest.TestCase):
         self.assertIn('lang="en"',html)
         self.assertIn('Overview</a>',html)
         self.assertIn('What is blocking publication?',html)
-        payload=html.split('id="secscan-summary">',1)[1].split('</script>',1)[0]
+        payload=html.split('id="kekkai-summary">',1)[1].split('</script>',1)[0]
         self.assertEqual(json.loads(payload)['project'],project)
         self.assertNotIn('</script>',payload)
         self.assertIn('Visão geral',payload)

@@ -1,0 +1,110 @@
+project:
+  name: Kekkai Example
+  web: false  # Set true for web applications and enable ZAP below.
+
+scan:
+  # Literal relative paths. Single folder names match at any depth.
+  exclude_paths:
+    - node_modules/
+    - dist/
+    - build/
+    - coverage/
+    - .git/
+    - .security/
+    - .cache/
+    - .venv/
+    - __pycache__/
+    - IDEA/
+    - references/
+    - samples/
+
+performance:
+  parallel: true
+  max_workers: 3
+  trivy_cache:
+    mode: smart
+    ttl_hours: 24
+    max_size_mb: 750
+    keep_scan_cache: false
+
+policy:
+  semgrep:
+    enabled: true
+    fail_on_findings: true
+  gitleaks:
+    enabled: true
+    fail_on_findings: true
+  sca:
+    enabled: true
+    version_risk:
+      enabled: true
+      fail_on: [HIGH, CRITICAL]
+    license:
+      enabled: true
+      full_scan: false
+      fail_on_classification: []
+      allow: []
+      deny: []
+  yara:
+    # Install Forge Core or import custom files in the desktop YARA Rules page.
+    enabled: false
+    use_managed: true
+    rules: [.kekkai/yara/]
+    fail_on_match: false
+    max_file_size_mb: 50
+    timeout_seconds: 10
+    max_scan_seconds: 300
+    max_total_size_mb: 1024
+  owasp:
+    enabled: true
+    version: auto
+    fail_on: [HIGH, CRITICAL]
+  zap:
+    enabled: false
+    target: http://localhost:4173
+    mode: baseline
+    fail_on: [FAIL]
+
+ai:
+  enabled: optional
+  provider: null
+  model: null
+  fail_on_findings: false
+  minimum_confidence: HIGH
+  fail_on: [HIGH, CRITICAL]
+  max_file_size_kb: 256
+  chunk_size_kb: 512
+  max_total_size_mb: 10
+  max_output_tokens: 8192
+  max_attempts: 2
+  max_retry_output_tokens: 32768
+  pricing:
+    input_per_million: null  # Optional manual USD rates.
+    output_per_million: null
+  timeout_seconds: 120
+  guide:
+    mode: default
+    path: null
+
+  providers:
+    openai:
+      enabled: true
+      model: null
+      base_url: https://api.openai.com/v1
+    anthropic:
+      enabled: true
+      model: null
+      base_url: https://api.anthropic.com/v1
+    deepseek:
+      enabled: false
+      model: null
+      base_url: https://api.deepseek.com
+    qwen:
+      enabled: false
+      model: null
+      base_url: https://dashscope-intl.aliyuncs.com/compatible-mode/v1
+
+reporting:
+  enabled: true
+  dashboard: true
+  output_dir: .security

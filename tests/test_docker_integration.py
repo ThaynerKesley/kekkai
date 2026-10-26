@@ -1,4 +1,4 @@
-"""Opt-in real Docker acceptance tests. Run with SECSCAN_DOCKER_TESTS=1."""
+"""Opt-in real Docker acceptance tests. Run with KEKKAI_DOCKER_TESTS=1."""
 import json
 import os
 import tempfile
@@ -6,17 +6,17 @@ import unittest
 from copy import deepcopy
 from pathlib import Path
 
-from secscan import configuration, scanners
-from secscan import secscan as api
-from secscan.files import Exclusions, Sanitizer
+from kekkai import configuration, scanners
+from kekkai import engine as api
+from kekkai.files import Exclusions
 
 
-@unittest.skipUnless(os.environ.get("SECSCAN_DOCKER_TESTS") == "1", "Docker integration opt-in")
+@unittest.skipUnless(os.environ.get("KEKKAI_DOCKER_TESTS") == "1", "Docker integration opt-in")
 class DockerIntegration(unittest.TestCase):
     def setUp(self):
         if scanners.docker_preflight():
             self.skipTest("Docker indisponível")
-        self.temp = tempfile.TemporaryDirectory(prefix="secscan-integration-")
+        self.temp = tempfile.TemporaryDirectory(prefix="kekkai-integration-")
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         self.exclusions = Exclusions(self.root, [*configuration.EXCLUDES, "IDEA", "references", "external refs"])
@@ -29,8 +29,8 @@ class DockerIntegration(unittest.TestCase):
         destination.write_text(content, encoding="utf-8")
 
     def test_real_gitleaks_custom_config_and_exclusions(self):
-        self.file(".gitleaks.toml", "[[rules]]\nid='fixture-rule'\nregex='''SECSCAN_SECRET_[A-Za-z0-9]{16}'''\n")
-        lab_value = "SECSCAN_SECRET_" + "A" * 16
+        self.file(".gitleaks.toml", "[[rules]]\nid='fixture-rule'\nregex='''KEKKAI_SECRET_[A-Za-z0-9]{16}'''\n")
+        lab_value = "KEKKAI_SECRET_" + "A" * 16
         self.file("src/leak.py", 'test_value = "' + lab_value + '"')
         # A sizeable ignored subtree validates traversal exclusions, not only parsing filters.
         for path in ["node_modules/large.js", "sub/node_modules/large.js", "IDEA/external.py", "references/external.py", "external refs/external.py"]:
@@ -93,13 +93,13 @@ class DockerIntegration(unittest.TestCase):
     def test_real_zap_local_target_memory_only_reports(self):
         import threading
         from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-        from secscan.runner import run_zap
+        from kekkai.runner import run_zap
         class Handler(BaseHTTPRequestHandler):
             def do_GET(self):
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.end_headers()
-                self.wfile.write(b"<!doctype html><html><title>SecScan fixture</title><p>Fixture</p></html>")
+                self.wfile.write(b"<!doctype html><html><title>Kekkai fixture</title><p>Fixture</p></html>")
 
             def log_message(self, *args):
                 return
@@ -116,5 +116,4 @@ class DockerIntegration(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    api.configure_stdio()
     unittest.main()

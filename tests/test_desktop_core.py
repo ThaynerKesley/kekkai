@@ -11,20 +11,20 @@ from pathlib import Path
 from unittest.mock import patch
 from uuid import uuid4
 
-from secscan import configuration, ai_review
-from secscan import secscan as engine
-from secscan.ai.credentials import WindowsCredentialStore, CredentialError
-from secscan.ai_providers import DeepSeekProvider, QwenProvider, ProviderError
-from secscan.core.execution import ExecutionContext, ScanCancelled
-from secscan.core.service import run_scan
-from secscan.core.storage import Preferences, ReportStore, save_project_config
-from secscan.dashboard import render
-from secscan.themes import tokens
+from kekkai import configuration, ai_review
+from kekkai import engine as engine
+from kekkai.ai.credentials import WindowsCredentialStore
+from kekkai.ai_providers import DeepSeekProvider, QwenProvider, ProviderError
+from kekkai.core.execution import ExecutionContext, ScanCancelled
+from kekkai.core.service import run_scan
+from kekkai.core.storage import Preferences, ReportStore, save_project_config
+from kekkai.dashboard import render
+from kekkai.themes import tokens
 
 
 class DesktopCoreTests(unittest.TestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory(prefix="secscan-desktop-test-")
+        self.temp = tempfile.TemporaryDirectory(prefix="kekkai-desktop-test-")
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         self.config = deepcopy(configuration.DEFAULTS)
@@ -38,7 +38,7 @@ class DesktopCoreTests(unittest.TestCase):
     def test_progress_events_are_structured_and_sanitized(self):
         self.config["policy"]["gitleaks"]["enabled"] = True
         events = []
-        with patch("secscan.scanners.docker_preflight", return_value="Docker offline"):
+        with patch("kekkai.scanners.docker_preflight", return_value="Docker offline"):
             result = run_scan(self.root, self.config, on_event=events.append)
         self.assertEqual(result["summary"]["result"], "error")
         self.assertEqual(sum(e["kind"] == "scanner_finished" for e in events), 7)
@@ -67,8 +67,8 @@ class DesktopCoreTests(unittest.TestCase):
             return ("", "")
         process.communicate.side_effect = communicate
         with patch("subprocess.Popen", return_value=process), patch.object(engine, "stop_container") as stop:
-            outcome = ExecutionContext(cancel).run_docker(["docker", "run"], 30, "secscan-owned-test")
-        stop.assert_called_once_with("secscan-owned-test")
+            outcome = ExecutionContext(cancel).run_docker(["docker", "run"], 30, "kekkai-owned-test")
+        stop.assert_called_once_with("kekkai-owned-test")
         process.kill.assert_called_once()
         self.assertEqual(outcome["error"], "Scan cancelado pelo usuário.")
 
@@ -77,7 +77,7 @@ class DesktopCoreTests(unittest.TestCase):
         preferences.data["scan_defaults"] = self.config
         preferences.save()
         save_project_config(self.root, self.config)
-        self.assertNotIn("api_key", (self.root / ".secscan.yml").read_text())
+        self.assertNotIn("api_key", (self.root / ".kekkai.yml").read_text())
         self.config["ai"]["api_key"] = "UNIT_TEST_CREDENTIAL"
         preferences.data["scan_defaults"] = self.config
         with self.assertRaises(ValueError):
@@ -102,7 +102,7 @@ class DesktopCoreTests(unittest.TestCase):
         self.config["profile"] = "quick"
         save_project_config(self.root, self.config)
         import yaml
-        data = yaml.safe_load((self.root / ".secscan.yml").read_text())
+        data = yaml.safe_load((self.root / ".kekkai.yml").read_text())
         self.assertEqual(data["custom_extension"], {"owner": "Fixture"})
         self.assertNotIn("profile", data)
 
@@ -129,7 +129,7 @@ class DesktopCoreTests(unittest.TestCase):
         self.assertIn('data-theme="light"', html)
         self.assertIn("Thayner Kesley", html)
         self.assertIn("Findings por severidade", html)
-        self.assertNotIn("__SECSCAN_", html)
+        self.assertNotIn("__KEKKAI_", html)
         self.assertNotIn('<script src="http', html)
         self.assertNotIn("</script><script>", render({"project": "</script><script>alert(1)</script>"}))
 
@@ -146,7 +146,7 @@ class DesktopCoreTests(unittest.TestCase):
 
     def test_deepseek_json_adapter_and_usage(self):
         response = {"choices": [{"finish_reason": "stop", "message": {"content": '{"findings":[]}'}}], "usage": {"prompt_tokens": 10, "completion_tokens": 20}}
-        with patch("secscan.ai_providers.post_json", return_value=response) as post:
+        with patch("kekkai.ai_providers.post_json", return_value=response) as post:
             text, usage = DeepSeekProvider().scan(key="UNIT_TEST_CREDENTIAL", model="deepseek-flash", guide="guide", bundle="FILE", schema=ai_review.SCHEMA, timeout=1, max_output_tokens=20)
         self.assertEqual(text, '{"findings":[]}')
         self.assertEqual(usage["input_tokens"], 10)
@@ -157,7 +157,7 @@ class DesktopCoreTests(unittest.TestCase):
 
     def test_qwen_official_region_and_json_mode(self):
         response = {"choices": [{"finish_reason": "stop", "message": {"content": '{"findings":[]}'}}]}
-        with patch("secscan.ai_providers.post_json", return_value=response) as post:
+        with patch("kekkai.ai_providers.post_json", return_value=response) as post:
             QwenProvider().scan(key="UNIT_TEST_CREDENTIAL", model="qwen-plus", guide="guide", bundle="FILE", schema={}, timeout=1, max_output_tokens=20)
         self.assertTrue(post.call_args.args[0].startswith("https://dashscope-intl.aliyuncs.com/"))
         self.assertFalse(post.call_args.args[2]["enable_thinking"])
@@ -167,7 +167,7 @@ class DesktopCoreTests(unittest.TestCase):
     @unittest.skipUnless(os.name == "nt", "Windows credential integration")
     def test_native_vault_round_trip_in_isolated_namespace(self):
         store = WindowsCredentialStore()
-        namespace = "SecScan/UnitTests/" + uuid4().hex
+        namespace = "Kekkai/UnitTests/" + uuid4().hex
         with patch.object(store, "_target", return_value=namespace):
             try:
                 store.save("deepseek", "UNIT_TEST_CREDENTIAL")

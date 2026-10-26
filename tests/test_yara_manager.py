@@ -1,6 +1,4 @@
 """Native YARA-X acceptance without malware samples or network by default."""
-import hashlib
-import io
 import json
 import os
 import tempfile
@@ -10,10 +8,10 @@ from copy import deepcopy
 from pathlib import Path
 from unittest.mock import patch
 
-from secscan import configuration, scanners
-from secscan import secscan as engine
-from secscan.files import Exclusions
-from secscan.yara_library import YaraRuleManager, RuleManagerError, extract_package
+from kekkai import configuration, scanners
+from kekkai import engine as engine
+from kekkai.files import Exclusions
+from kekkai.yara_library import YaraRuleManager, RuleManagerError, extract_package
 
 RULE = '''rule Kekkai_Test : harmless {
 meta:
@@ -42,7 +40,7 @@ class YaraManagerTests(unittest.TestCase):
         project=self.root/'project';project.mkdir()
         (project/'sample.txt').write_text('KEKKAI_HARMLESS_TEST_MARKER')
         policy=deepcopy(configuration.DEFAULTS['policy']['yara'])
-        with patch('secscan.scanners.YaraRuleManager',return_value=self.manager):
+        with patch('kekkai.scanners.YaraRuleManager',return_value=self.manager):
             result=scanners.run_yara(engine,project,policy,Exclusions(project,[]))
         self.assertEqual(result['status'],'warn')
         finding=result['findings'][0]
@@ -70,7 +68,7 @@ class YaraManagerTests(unittest.TestCase):
     def test_failed_validation_and_update_preserve_previous_snapshot(self):
         first=self.manager.import_files([self.rule()])
         with self.assertRaises(RuleManagerError):self.manager.import_files([self.rule('rule Broken { condition: ??? }')])
-        with patch('secscan.yara_library.fetch',side_effect=RuleManagerError('Network unavailable')):
+        with patch('kekkai.yara_library.fetch',side_effect=RuleManagerError('Network unavailable')):
             with self.assertRaises(RuleManagerError):self.manager.update()
         self.assertEqual(self.manager.state()['libraries'][0]['id'],first['id'])
         self.assertEqual(len(self.manager.active_sets()),1)
@@ -79,7 +77,7 @@ class YaraManagerTests(unittest.TestCase):
     def test_digest_failure_prevents_install(self):
         release={'tag_name':'test','assets':[{'name':'yara-forge-rules-core.zip','digest':'sha256:'+'0'*64,
                   'browser_download_url':'https://github.com/YARAHQ/yara-forge/releases/download/test/yara-forge-rules-core.zip'}]}
-        with patch('secscan.yara_library.fetch',side_effect=[json.dumps(release).encode(),b'corrupt archive']):
+        with patch('kekkai.yara_library.fetch',side_effect=[json.dumps(release).encode(),b'corrupt archive']):
             with self.assertRaises(RuleManagerError):self.manager.update()
         self.assertEqual(self.manager.state()['libraries'],[])
 
@@ -110,7 +108,7 @@ class YaraManagerTests(unittest.TestCase):
 
     def test_offline_auto_update_failure_uses_previous_valid_set(self):
         self.manager.import_files([self.rule()]);self.manager.settings(True,'core',1)
-        with patch('secscan.yara_library.time.time',return_value=10**12),patch('secscan.yara_library.fetch',side_effect=RuleManagerError('Network unavailable')):
+        with patch('kekkai.yara_library.time.time',return_value=10**12),patch('kekkai.yara_library.fetch',side_effect=RuleManagerError('Network unavailable')):
             self.assertEqual(len(self.manager.active_sets(auto_update=True)),1)
 
     @unittest.skipUnless(os.environ.get('KEKKAI_NETWORK_TESTS')=='1','Official Forge download opt-in')
@@ -119,7 +117,7 @@ class YaraManagerTests(unittest.TestCase):
         self.assertGreater(entry['valid'],0)
         self.assertGreater(entry['active'],0)
         self.assertRegex(entry['download_sha256'],r'^[a-f0-9]{64}$')
-        with patch('secscan.yara_library.fetch',side_effect=AssertionError('Offline load must not fetch')):
+        with patch('kekkai.yara_library.fetch',side_effect=AssertionError('Offline load must not fetch')):
             self.assertEqual(len(list(self.manager.load(entry))),entry['valid'])
 
 

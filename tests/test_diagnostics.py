@@ -10,11 +10,11 @@ from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from unittest.mock import patch
 
-from secscan import configuration, scanners, runner, ai_review
-from secscan import secscan as api
-from secscan.files import Exclusions
-from secscan.ai_providers import DeepSeekProvider, QwenProvider, ProviderError, post_json, capabilities
-from secscan.web_target import test_target, is_web_project
+from kekkai import configuration, scanners, runner, ai_review
+from kekkai import engine as api
+from kekkai.files import Exclusions
+from kekkai.ai_providers import DeepSeekProvider, QwenProvider, ProviderError, post_json
+from kekkai.web_target import test_target, is_web_project
 
 
 class ScannerDiagnosticsTests(unittest.TestCase):
@@ -32,7 +32,7 @@ class ScannerDiagnosticsTests(unittest.TestCase):
         data = {'results':results,'errors':errors or [],'paths':{'scanned':['/src/valid.py','/src/broken.py']},'version':'fixture'}
         outcome = {'exit_code':code,'error':None,'infrastructure':False,'stdout':json.dumps(data),'stderr':stderr}
         selection = ({'rules':[]},{'edition':'2021','categories':[]})
-        with patch('secscan.scanners.scan_command',return_value=outcome), patch('secscan.scanners.urllib.request.urlopen') as get, patch('secscan.scanners.select_owasp_rules',return_value=selection):
+        with patch('kekkai.scanners.scan_command',return_value=outcome), patch('kekkai.scanners.urllib.request.urlopen') as get, patch('kekkai.scanners.select_owasp_rules',return_value=selection):
             get.return_value.__enter__.return_value.read.return_value=b'rules: []'
             return scanners.run_semgrep(api,self.root,self.config['policy']['owasp' if owasp else 'semgrep'],self.exclusions,owasp)
 
@@ -78,14 +78,14 @@ class ScannerDiagnosticsTests(unittest.TestCase):
     def test_semgrep_terminated_and_truncated(self):
         self.assertEqual(self.semgrep(code=137)['status'],'error')
         outcome={'exit_code':0,'error':None,'infrastructure':False,'stdout':'{"results":','stderr':''}
-        with patch('secscan.scanners.scan_command',return_value=outcome):
+        with patch('kekkai.scanners.scan_command',return_value=outcome):
             self.assertEqual(scanners.run_semgrep(api,self.root,self.config['policy']['semgrep'],self.exclusions)['status'],'error')
 
     def test_owasp_valid(self):
         self.assertEqual(self.semgrep(owasp=True)['status'],'pass')
 
     def test_owasp_registry_failure(self):
-        with patch('secscan.scanners.urllib.request.urlopen',side_effect=urllib.error.URLError('PRIVATE_SOURCE_FIXTURE')):
+        with patch('kekkai.scanners.urllib.request.urlopen',side_effect=urllib.error.URLError('PRIVATE_SOURCE_FIXTURE')):
             result=scanners.run_semgrep(api,self.root,self.config['policy']['owasp'],self.exclusions,True)
         self.assertEqual(result['diagnostic']['error_type'],'network_error')
         self.assertNotIn('PRIVATE_SOURCE_FIXTURE',json.dumps(result))
@@ -101,7 +101,7 @@ class ScannerDiagnosticsTests(unittest.TestCase):
 
     def test_yara_no_rules(self):
         self.assertEqual(scanners.run_yara(api,self.root,self.config['policy']['yara'],self.exclusions)['status'],'skipped')
-        self.config['policy']['yara']['rules']=['.secscan/yara/']
+        self.config['policy']['yara']['rules']=['.kekkai/yara/']
         self.assertEqual(scanners.run_yara(api,self.root,self.config['policy']['yara'],self.exclusions)['status'],'skipped')
 
     def test_yara_valid_rule(self):
@@ -127,20 +127,20 @@ class ScannerDiagnosticsTests(unittest.TestCase):
         self.assertEqual(result['status'],'skipped');docker.assert_not_called()
 
     def test_zap_offline_without_container(self):
-        with patch('secscan.runner.test_target',return_value={'reachable':False,'diagnostic':{'error_type':'target_unreachable','summary':'offline'}}),patch.object(api,'run_docker') as docker:
+        with patch('kekkai.runner.test_target',return_value={'reachable':False,'diagnostic':{'error_type':'target_unreachable','summary':'offline'}}),patch.object(api,'run_docker') as docker:
             result=runner.run_zap(api,{'target':'http://localhost:4173','mode':'baseline','fail_on':[]})
         self.assertEqual(result['status'],'skipped');docker.assert_not_called()
 
     def test_zap_online_windows_translation(self):
         outcome={'exit_code':0,'error':None,'stdout':json.dumps({'site':[{'alerts':[]}]}),'stderr':'','infrastructure':False}
-        with patch('secscan.runner.probe_zap_container',return_value={'reachable':True}),patch('secscan.runner.os.name','nt'),patch.object(api,'run_docker',return_value=outcome) as docker:
+        with patch('kekkai.runner.probe_zap_container',return_value={'reachable':True}),patch('kekkai.runner.os.name','nt'),patch.object(api,'run_docker',return_value=outcome) as docker:
             result=runner.run_zap(api,{'target':'http://localhost:4173','mode':'baseline','fail_on':[]},preflight={'reachable':True})
         self.assertEqual(result['status'],'pass')
         self.assertEqual(docker.call_args.args[0][-1],'http://host.docker.internal:4173')
 
     def test_zap_container_failure_is_error(self):
         outcome={'exit_code':3,'error':None,'stdout':'{}','stderr':'','infrastructure':False}
-        with patch('secscan.runner.probe_zap_container',return_value={'reachable':True}),patch.object(api,'run_docker',return_value=outcome):
+        with patch('kekkai.runner.probe_zap_container',return_value={'reachable':True}),patch.object(api,'run_docker',return_value=outcome):
             result=runner.run_zap(api,{'target':'http://localhost:4173','mode':'baseline','fail_on':[]},preflight={'reachable':True})
         self.assertEqual(result['status'],'error')
 
@@ -171,7 +171,7 @@ class ProviderDiagnosticsTests(unittest.TestCase):
         return adapter.scan(key='UNIT_TEST_CREDENTIAL',model=model,guide='Return JSON',bundle='PRIVATE_SOURCE_FIXTURE',schema=ai_review.SCHEMA,timeout=1,max_output_tokens=8192)
 
     def test_deepseek_payload_capabilities(self):
-        with patch('secscan.ai_providers.post_json',return_value=self.response()) as post:
+        with patch('kekkai.ai_providers.post_json',return_value=self.response()) as post:
             self.scan(DeepSeekProvider(),'deepseek-flash')
         body=post.call_args.args[2]
         self.assertEqual(body['response_format'],{'type':'json_object'})
@@ -179,18 +179,18 @@ class ProviderDiagnosticsTests(unittest.TestCase):
         self.assertTrue(post.call_args.args[0].endswith('/chat/completions'))
 
     def test_deepseek_version_name_maps_to_official_api_id(self):
-        with patch('secscan.ai_providers.post_json',return_value=self.response()) as post:
+        with patch('kekkai.ai_providers.post_json',return_value=self.response()) as post:
             self.scan(DeepSeekProvider(),'DeepSeek-V4-Pro-0813')
         self.assertEqual(post.call_args.args[2]['model'],'deepseek-v4-pro')
         self.assertEqual(post.call_args.args[2]['response_format'],{'type':'json_object'})
 
     def test_qwen_native_schema(self):
-        with patch('secscan.ai_providers.post_json',return_value=self.response()) as post:self.scan(QwenProvider(),'qwen3.8-max')
+        with patch('kekkai.ai_providers.post_json',return_value=self.response()) as post:self.scan(QwenProvider(),'qwen3.8-max')
         self.assertEqual(post.call_args.args[2]['response_format']['type'],'json_schema')
 
     def test_qwen_without_native_schema(self):
         for model in ('qwen-plus','qwen2.5-coder-32b-instruct','custom-model'):
-            with self.subTest(model=model),patch('secscan.ai_providers.post_json',return_value=self.response()) as post:
+            with self.subTest(model=model),patch('kekkai.ai_providers.post_json',return_value=self.response()) as post:
                 text,_=self.scan(QwenProvider(),model)
                 self.assertEqual(ai_review.parse_response(text,set(),{})['findings'],[])
                 self.assertNotEqual(post.call_args.args[2].get('response_format',{}).get('type'),'json_schema')
@@ -198,7 +198,7 @@ class ProviderDiagnosticsTests(unittest.TestCase):
 
     def http_error(self,status,message,code='InvalidParameter'):
         error=urllib.error.HTTPError('https://api.deepseek.com/chat/completions',status,'rejected',{},io.BytesIO(json.dumps({'error':{'code':code,'message':message}}).encode()))
-        with patch('secscan.ai_providers.urllib.request.build_opener') as opener:
+        with patch('kekkai.ai_providers.urllib.request.build_opener') as opener:
             opener.return_value.open.side_effect=error
             with self.assertRaises(ProviderError) as caught:
                 post_json('https://api.deepseek.com/chat/completions',{'Authorization':'Bearer UNIT_TEST_CREDENTIAL'},{'model':'deepseek-flash'},1)
@@ -233,11 +233,11 @@ class ProviderDiagnosticsTests(unittest.TestCase):
         with self.assertRaises(ProviderError):ai_review.parse_response('{"unexpected":[]}',set(),{})
 
     def test_thinking_model_rejected_before_request(self):
-        with patch('secscan.ai_providers.post_json') as post,self.assertRaises(ProviderError):self.scan(QwenProvider(),'qwen3-235b-a22b-thinking-2507')
+        with patch('kekkai.ai_providers.post_json') as post,self.assertRaises(ProviderError):self.scan(QwenProvider(),'qwen3-235b-a22b-thinking-2507')
         post.assert_not_called()
 
     def test_connection_never_sends_source(self):
-        with patch('secscan.ai_providers.post_json',return_value=self.response('{"ok":true}')) as post:
+        with patch('kekkai.ai_providers.post_json',return_value=self.response('{"ok":true}')) as post:
             result=DeepSeekProvider().test_connection('UNIT_TEST_CREDENTIAL','deepseek-flash')
         self.assertTrue(result['connected'])
         body=post.call_args.args[2]
@@ -246,7 +246,7 @@ class ProviderDiagnosticsTests(unittest.TestCase):
         self.assertEqual(body['thinking'],{'type':'disabled'})
 
     def test_connection_rejects_invalid_schema(self):
-        with patch('secscan.ai_providers.post_json',return_value=self.response('{"wrong":true}')),self.assertRaises(ProviderError):
+        with patch('kekkai.ai_providers.post_json',return_value=self.response('{"wrong":true}')),self.assertRaises(ProviderError):
             QwenProvider().test_connection('UNIT_TEST_CREDENTIAL','qwen-plus')
 
 

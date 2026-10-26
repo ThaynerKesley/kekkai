@@ -4,7 +4,7 @@
 
 [English](README.md) · [Português (Brasil)](README.pt-BR.md) · [MIT license](LICENSE)
 
-Created by **Thayner Kesley**. Kekkai brings independent security tools into a Python CLI and an optional PySide6 desktop application. It applies your policies, preserves useful partial results, and generates an offline HTML dashboard. Findings are signals to investigate; an approved scan does not prove that software is secure.
+Created by **Thayner Kesley**. Kekkai brings independent security tools into a PySide6 desktop application. It applies your policies, preserves useful partial results, and generates an offline HTML dashboard. Findings are signals to investigate; an approved scan does not prove that software is secure.
 
 ## What it does
 
@@ -18,14 +18,14 @@ Created by **Thayner Kesley**. Kekkai brings independent security tools into a P
 | Local web application | OWASP ZAP baseline | Dynamic checks against a running local target |
 | Optional AI review | OpenAI, Anthropic, DeepSeek, Qwen | Structured, consented review with manual validation |
 
-The desktop includes project selection, quick/full profiles, scanner policies, progress, cancellation, report history/export/deletion, a YARA Rule Manager, light/dark themes, and Portuguese/English interfaces. The CLI runs without Qt.
+The desktop includes project selection, quick/full profiles, scanner policies, progress, cancellation, report history/export/deletion, a YARA Rule Manager, light/dark themes, and Portuguese/English interfaces. Kekkai provides a graphical desktop interface only.
 
 ## Requirements
 
 - Python **3.11+** and `pip` in a virtual environment. Development validation uses Python 3.13 on Windows.
 - Docker with Linux containers for Semgrep, Gitleaks, Trivy, OWASP, and ZAP. On Windows, use Docker Desktop with its Linux/WSL2 engine.
 - YARA-X runs natively through the Python package; the managed library requires `yara-x >=1.21,<2`.
-- Desktop use additionally requires PySide6/Qt WebEngine from `requirements-gui.txt`. Linux desktop installations may need the platform dependencies required by Qt.
+- PySide6/Qt WebEngine is installed with `requirements.txt`. Linux desktop installations may need the platform dependencies required by Qt.
 - Internet access is needed for initial dependency/image/database/rule downloads and AI requests. The saved dashboard and previously validated YARA library work offline. Other scanners depend on their own cached resources and upstream behavior.
 
 Kekkai uses the installed Docker executable and third-party images (`semgrep/semgrep:latest`, `zricethezav/gitleaks:latest`, `aquasec/trivy:latest`, `ghcr.io/zaproxy/zaproxy:stable`). Those tags can change independently of Kekkai.
@@ -38,17 +38,19 @@ Windows / PowerShell:
 git clone https://github.com/ThaynerKesley/kekkai.git
 Set-Location kekkai
 python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements-gui.txt
-.\.venv\Scripts\python.exe kekkai-gui.py --language en
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe kekkai.py --language en
 ```
+
+To start without a console window on Windows, use `.\.venv\Scripts\pythonw.exe -m kekkai`.
 
 Open a project directly:
 
 ```powershell
-.\.venv\Scripts\python.exe kekkai-gui.py C:\path\to\project --language en
+.\.venv\Scripts\python.exe kekkai.py C:\path\to\project --language en
 ```
 
-Linux / WSL, CLI installation:
+Linux desktop / WSL with graphical application support:
 
 ```bash
 git clone https://github.com/ThaynerKesley/kekkai.git
@@ -56,21 +58,22 @@ cd kekkai
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
 docker info
+.venv/bin/python -m kekkai --language en
 ```
 
-There is no Flask requirement in the application. Vulnerable dependencies and dummy credentials used in tests are created as isolated temporary fixtures.
+The application opens a desktop window. Vulnerable dependencies and dummy credentials used by regression tests are created in isolated temporary projects.
 
 ## Choose your language
 
 ```powershell
-python kekkai-gui.py --language en
-python kekkai-gui.py --language pt_BR
-python kekkai.py --language en check C:\path\to\project --profile quick
+python kekkai.py --language en
+python kekkai.py --language pt_BR
+python -m kekkai --language en
 ```
 
 The desktop language can also be saved in **Settings → Language**. Restart Kekkai to apply a changed preference. Portuguese is the compatibility default. The generated dashboard uses the active language. Project names, paths, machine-readable keys/statuses, rule metadata, and external finding text retain their original values/language.
 
-Legacy launchers (`secscan.py`, `secscan-gui.py`, `python -m secscan.gui`, and `secscan/secscan.py`) remain available. The Python package and configuration file retain the `secscan` name for compatibility.
+The application package is `kekkai`; `python kekkai.py` and `python -m kekkai` both open the same GUI. Startup accepts an optional project directory and language. Scanner selection, profiles, review consent and report management are handled inside the application.
 
 ## First scan
 
@@ -80,23 +83,20 @@ Legacy launchers (`secscan.py`, `secscan-gui.py`, `python -m secscan.gui`, and `
 4. Run **Quick** for static checks or **Full** for all selected checks. AI always requires a separate request and confirmation.
 5. Inspect findings, partial coverage, and diagnostics. Save the project configuration explicitly if you want to persist it to YAML.
 
-For CLI use, place a configuration in the project being scanned:
+Use **Save configuration** in the GUI to write `.kekkai.yml` inside the selected project. For a prepared configuration, copy the reviewed example:
 
 ```powershell
-Copy-Item .secscan.example.yml C:\path\to\project\.secscan.yml
-python kekkai.py --language en check C:\path\to\project --profile quick
-python kekkai.py --language en check C:\path\to\project --profile full
-python kekkai.py --language en check C:\path\to\project --profile full --ai
+Copy-Item .kekkai.example.yml C:\path\to\project\.kekkai.yml
 ```
 
-The CLI requires `.secscan.yml`; it does not silently invent enabled policies. The complete example is [`.secscan.example.yml`](.secscan.example.yml). Do not put API keys in it.
+The complete example is [`.kekkai.example.yml`](.kekkai.example.yml). API keys never belong in project YAML.
 
-### Profiles, decisions, and exit codes
+### Profiles and scan decisions
 
 - **Quick:** disables ZAP, AI, and full license scanning; other configured static checks remain available.
-- **Full:** runs enabled checks. `--ai` explicitly requests interactive AI review; `ai.enabled` alone never sends source.
-- Internal scanner states are `pass`, `warn`, `fail`, `error`, and `skipped`. The UI/CLI displays `fail` as **COMPLETED WITH ERROR**; policy blocking is preserved.
-- Overall `approved` exits **0**. Policy `blocked` or technical `error` exits **1**. Technical errors take precedence. Warnings and skipped checks do not by themselves block publication.
+- **Full:** runs enabled checks. The GUI requests and confirms optional AI review; `ai.enabled` alone never sends source.
+- Internal scanner states are `pass`, `warn`, `fail`, `error`, and `skipped`. The interface displays `fail` as **COMPLETED WITH ERROR**; policy blocking is preserved.
+- Overall decisions are `approved`, policy `blocked`, or technical `error`. Technical errors take precedence. Warnings and skipped checks do not by themselves block publication. These are report decisions; closing the GUI does not return a scan result code.
 - A scanner failure does not cancel the remaining checks. Isolated parsing warnings preserve available findings and show partial coverage. Skipped or partial checks must be considered when interpreting approval.
 
 ## Configuration
@@ -141,7 +141,7 @@ Import the rule, enable YARA, and scan a text file containing the marker. Result
 
 Configure an official provider endpoint/model in **AI Review**. DeepSeek uses API model IDs `deepseek-v4-pro` and `deepseek-flash`; the version alias `DeepSeek-V4-Pro-0813` is normalized. Qwen supports the documented regional endpoints and constrained official workspace endpoints. Capabilities determine JSON/schema mode; local schema and file/line validation always apply.
 
-Each review requires explicit consent showing selected files, approximate size, the resolved guide path/size, request count, and token/cost estimates. Repository-selected external/excluded guides require explicit local selection; secret-bearing guides are rejected. The built-in guide is [`secscan/prompts/security.md`](secscan/prompts/security.md). A locally chosen external guide remains supported and is disclosed in consent.
+Each review requires explicit consent showing selected files, approximate size, the resolved guide path/size, request count, and token/cost estimates. Repository-selected external/excluded guides require explicit local selection; secret-bearing guides are rejected. The built-in guide is [`kekkai/prompts/security.md`](kekkai/prompts/security.md). A locally chosen external guide remains supported and is disclosed in consent.
 
 Requests contain only the guide and current source group, without conversation history or previous responses. Known sensitive files, excluded paths, detected secret files and size-limited files are omitted. Bounded retries address truncated/invalid responses: default 2 attempts per group, initially 8,192 output tokens, up to 32,768 on retry. Exhausted groups are recorded and later groups continue; authentication/configuration incompatibilities stop further requests. Valid earlier findings are preserved and incomplete reviews remain errors.
 
@@ -149,7 +149,7 @@ Tokens reported by the API are aggregated, including available failed-response u
 
 The built-in DeepSeek price snapshot is dated **2026-10-26**, with a cache-aware off-peak/peak range. For example, 100,000 uncached input tokens plus 20,000 output tokens on V4 Pro estimates **US$0.1056–0.2112**. Verify the [official pricing](https://api-docs.deepseek.com/quick_start/pricing/); rates can change. Other models/providers can use manual USD-per-million input/output rates in the AI policy. No account/billing API is queried.
 
-Keys are masked and memory-only by default. Explicitly saving a key on Windows uses **Windows Credential Manager**, without a plaintext fallback. Provider configuration can be saved independently of keys. CLI input uses `getpass`; it does not automatically read the desktop vault. Connection tests send only a minimal no-source message and can consume API tokens. AI findings always require manual validation; provider retention policies apply to submitted content.
+Keys are masked and memory-only by default. Explicitly saving a key on Windows uses **Windows Credential Manager**, without a plaintext fallback. Provider configuration can be saved independently of keys. Connection tests send only a minimal no-source message and can consume API tokens. AI findings always require manual validation; provider retention policies apply to submitted content.
 
 ## Reports, history, and privacy
 
@@ -163,11 +163,11 @@ Default project output:
   history/<timestamp-id>/      # Desktop snapshots; raw files are flattened here
 ```
 
-The desktop lists the current result and archived runs, opens their summaries/raw files/dashboards, exports ZIPs, and deletes selected reports after confirmation. Deleting the current result does not delete separate history; deleting one snapshot preserves other runs, source, and cache. The CLI overwrites its current output and does not automatically create desktop history.
+The desktop lists the current result and archived runs, opens their summaries/raw files/dashboards, exports ZIPs, and deletes selected reports after confirmation. Deleting the current result does not delete separate history; deleting one snapshot preserves other runs, source, and cache. Completed GUI runs archive their results in the local report history.
 
 Sanitization removes known secret forms, source/evidence fields and matching content where supported. **Reports still contain project paths, dependency names, policy, endpoints and findings. Review them before sharing.** No detector can guarantee that all sensitive information has been removed. Gitleaks custom rules/allowlists affect coverage.
 
-`.gitignore` excludes local project YAML, reports, caches, environments, keys, historical validation notes, lab files, private screenshots, and design references. The published assets include the supplied Kekkai logos. A custom report output directory outside the default requires its own ignore/review rules. Never commit real credentials or force-add ignored artifacts.
+`.gitignore` allows only the application package, regression tests, launch script, dependencies, license and reviewed project documentation. Other root-level files stay local by default. Additional rules exclude project YAML, reports, caches, environments, keys, private screenshots and design references inside application folders. The published assets include the supplied Kekkai logos. A custom report output directory outside the default requires its own ignore/review rules. Never commit real credentials or force-add ignored artifacts.
 
 The integrated viewer uses an off-the-record WebEngine profile and blocks remote navigation, popups, and unrelated local files. Temporary rendered HTML is removed on close. Scanner source mounts are read-only, but exclusions are scanner instructions, not a filesystem sandbox hiding excluded files from a trusted scanner container. Semgrep auto configuration can use its own registry/metrics behavior. Run tools only against projects and local applications you are authorized to assess.
 
@@ -183,32 +183,25 @@ On Windows, a server bound only to `localhost`/`::1` can be reachable from the h
 - **persistent:** retains supported caches.
 - **ephemeral:** uses temporary storage discarded after the run.
 
-The default database TTL is 24 hours and cleanup budget is 750 MiB. Usable databases are not automatically deleted to meet this budget. Actual legacy-compatible locations are `%LOCALAPPDATA%\SecScan\cache\trivy` on Windows and `$XDG_CACHE_HOME/SecScan/cache/trivy` (or `~/.cache/SecScan/cache/trivy`) on Linux.
+The default database TTL is 24 hours and cleanup budget is 750 MiB. Usable databases are not automatically deleted to meet this budget. The application cache locations are `%LOCALAPPDATA%\Kekkai\cache\trivy` on Windows and `$XDG_CACHE_HOME/Kekkai/cache/trivy` (or `~/.cache/Kekkai/cache/trivy`) on Linux.
 
-```powershell
-python kekkai.py cache status
-python kekkai.py cache clean --scope scan
-python kekkai.py cache clean --scope databases
-python kekkai.py cache clean --scope all --yes
-```
-
-Database/all cleanup requires confirmation unless `--yes` is explicitly supplied. Only Trivy's supported cleanup operations are used.
+Configure the cache mode, TTL and size budget in **Settings**. Smart mode cleans disposable entries through supported Trivy operations while preserving useful databases.
 
 ## Development and verification
 
 ```powershell
-python -m pip install -r requirements-gui.txt
+python -m pip install -r requirements.txt
 python -m unittest discover -s tests -v
-python -m compileall -q secscan tests kekkai.py kekkai-gui.py
+python -m compileall -q kekkai tests kekkai.py
 ```
 
-Core-only installations skip GUI tests. Real Docker and official Forge acceptance checks are opt-in:
+Real Docker and official Forge acceptance checks are opt-in:
 
 ```powershell
-$env:SECSCAN_DOCKER_TESTS = '1'
+$env:KEKKAI_DOCKER_TESTS = '1'
 $env:KEKKAI_NETWORK_TESTS = '1'
 python -m unittest discover -s tests -v
-Remove-Item Env:\SECSCAN_DOCKER_TESTS
+Remove-Item Env:\KEKKAI_DOCKER_TESTS
 Remove-Item Env:\KEKKAI_NETWORK_TESTS
 ```
 
@@ -216,7 +209,9 @@ Tests use harmless markers, mock AI traffic, temporary projects and an isolated 
 
 Architecture: `core/service.py` exposes the shared scan API; `runner.py` orchestrates; `scanners.py` integrates tools; `configuration.py` validates policies; `ai_providers.py`/`ai_review.py` implement stateless AI boundaries; `yara_library.py` manages validated rules; `core/storage.py` handles preferences/history; `gui/` presents Qt screens; `dashboard/` renders offline HTML; `themes/` shares tokens. Extend these components instead of creating a parallel backend.
 
-Contributions should include focused regression tests, preserve machine-readable contracts and legacy launchers, and keep secrets/real scan artifacts out of commits. Application preferences remain under `%LOCALAPPDATA%\SecScan\desktop` (or `~/.local/share/SecScan/desktop`); the Windows vault namespace remains `SecScan/AI`.
+Contributions should include focused regression tests, preserve the desktop workflow and machine-readable contracts, and keep secrets/real scan artifacts out of commits. Application preferences are stored under `%LOCALAPPDATA%\Kekkai\desktop` (or `~/.local/share/Kekkai/desktop`); the Windows vault namespace is `Kekkai/AI`.
+
+For an existing installation, rename each project configuration to `.kekkai.yml` and custom rule folders to `.kekkai/yara/`. Re-enter saved API keys in the new Kekkai vault namespace. Personal preferences, downloaded rules, reports, cache and keys are local runtime data and are never part of the source distribution.
 
 ## License and credits
 

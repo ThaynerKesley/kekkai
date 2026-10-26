@@ -1,16 +1,15 @@
 """Bounded retries, partial progress and estimates with mocked provider traffic."""
-import json
 import tempfile
 import unittest
 from copy import deepcopy
 from pathlib import Path
 from unittest.mock import patch
 
-from secscan import ai_review, configuration
-from secscan import secscan as engine
-from secscan.ai_cost import estimate_cost, estimate_plan
-from secscan.ai_providers import DeepSeekProvider, ProviderError
-from secscan.files import Exclusions, Sanitizer
+from kekkai import ai_review, configuration
+from kekkai import engine as engine
+from kekkai.ai_cost import estimate_cost, estimate_plan
+from kekkai.ai_providers import DeepSeekProvider, ProviderError
+from kekkai.files import Exclusions, Sanitizer
 
 
 class Interaction:
@@ -39,7 +38,7 @@ class AIReliabilityTests(unittest.TestCase):
 
     def run_review(self,responses):
         interaction=Interaction();events=[]
-        with patch('secscan.ai_providers.post_json',side_effect=responses) as post,patch('secscan.ai_review.time.sleep'):
+        with patch('kekkai.ai_providers.post_json',side_effect=responses) as post,patch('kekkai.ai_review.time.sleep'):
             result=ai_review.run_ai(engine,self.root,self.options,Exclusions(self.root,[]),engine.make_result('gitleaks','pass',0,[]),
                                    Sanitizer(),True,'full',interaction=interaction,on_event=events.append)
         return result,post,events,interaction
