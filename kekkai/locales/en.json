@@ -617,5 +617,6 @@
   "conhecida": "known",
   "indicada": "reported",
   "Navegador": "Browser",
-  "Abrir relatório em": "Open report in"
+  "Abrir relatório em": "Open report in",
+  "A verificação não pôde ser concluída. Consulte os eventos do scan.": "The check could not complete. See the scan events."
 }

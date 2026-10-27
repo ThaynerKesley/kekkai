@@ -26,10 +26,10 @@ DISPLAY_NAMES = {
     "zap": "ZAP",
 }
 STATUS_LABELS = {
-    "pass": "PASS",
-    "warn": "WARN",
-    "fail": "COMPLETED WITH ERROR",
-    "error": "ERROR",
+    "pass": "COMPLETED",
+    "warn": "COMPLETED",
+    "fail": "COMPLETED",
+    "error": "COMPLETED",
     "skipped": "SKIPPED",
 }
 RESULT_LABELS = TranslatedLabels({
@@ -249,6 +249,14 @@ def status_from_findings(findings: list[dict]) -> str:
     if findings:
         return "warn"
     return "pass"
+
+
+def diagnostic_message(result: dict) -> str:
+    details = result.get("diagnostic")
+    message = (details.get("summary") if isinstance(details, dict) else None) or result.get("error")
+    if message:
+        return str(message)
+    return tr("A verificação não pôde ser concluída. Consulte os eventos do scan.") if result.get("status") == "error" else ""
 
 
 def unexpected_failure(scanner: str) -> dict:

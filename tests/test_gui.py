@@ -278,6 +278,35 @@ class GuiTests(unittest.TestCase):
                                      'diagnostic':{'summary':'Nenhuma regra YARA configurada.'}})
         self.assertIn('Nenhuma regra',self.window.scan_page.scanner_table.item(3,4).text())
 
+    def test_completed_status_keeps_errors_in_diagnostic_column(self):
+        for index, status in enumerate(("pass", "warn", "fail", "error")):
+            self.window.scan_page.receive({"kind": "scanner_finished", "scanner": ("semgrep", "gitleaks", "sca", "yara")[index],
+                "status": status, "findings": 1, "duration_seconds": 1,
+                "diagnostic": {"summary": "Partial parsing error"} if status == "error" else None})
+            self.assertEqual(self.window.scan_page.scanner_table.item(index, 1).text(), "COMPLETED")
+            self.assertEqual(self.window.scan_page.scanner_table.item(index, 4).text(), "Partial parsing error" if status == "error" else "")
+
+    def test_dashboard_completion_status_preserves_diagnostics_and_blocking(self):
+        from kekkai import engine
+        summary = self.report_fixture()
+        summary["scanners"]["semgrep"].update(status="error", diagnostic={"summary": "Partial parsing error"})
+        self.window.summary = summary
+        self.window.refresh()
+        self.assertEqual(self.window.pages["home"].scanner_table.item(0, 1).text(), "COMPLETED")
+        self.assertEqual(self.window.pages["home"].scanner_table.item(0, 4).text(), "Partial parsing error")
+        self.assertEqual(summary["result"], "blocked")
+        self.assertEqual(engine.diagnostic_message({"status": "error", "error": "Tool timeout"}), "Tool timeout")
+        self.assertTrue(engine.diagnostic_message({"status": "error"}))
+        dashboard = self.window.pages["dashboard"]
+        ready = []
+        dashboard.view.loadFinished.connect(ready.append)
+        dashboard.show_summary(summary, "dark")
+        self.wait_for(lambda: bool(ready))
+        values = []
+        dashboard.page.runJavaScript("JSON.stringify({badge:document.querySelector('#cards .badge').textContent,diagnostic:document.querySelector('#executed tr:nth-child(2) td:last-child').textContent,header:document.querySelector('#executed th:last-child').textContent})", values.append)
+        self.wait_for(lambda: bool(values))
+        self.assertEqual(json.loads(values[0]), {"badge": "COMPLETED", "diagnostic": "Partial parsing error", "header": "Diagnóstico"})
+
     def test_theme_toggles_and_shared_tokens(self):
         self.assertEqual(self.window.theme, "dark")
         QTest.mouseClick(self.window.theme_button, Qt.MouseButton.LeftButton)

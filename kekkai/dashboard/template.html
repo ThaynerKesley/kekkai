@@ -63,7 +63,7 @@
       var scannerOrder = ["semgrep", "gitleaks", "sca", "yara", "owasp", "zap", "ai"];
       var scannerNames = {semgrep: "Semgrep", gitleaks: "Gitleaks", sca: "SCA", yara: "YARA Rules", owasp: "OWASP Top 10", zap: "ZAP", ai: "AI Security Review"};
       var state = { filter: "all", scanner: "all", query: "", group: "priority", view: "executive" };
-      var statusText = { pass: "PASS", warn: "WARN", fail: "COMPLETED WITH ERROR", error: "ERROR", skipped: "SKIPPED" };
+      var statusText = { pass: "COMPLETED", warn: "COMPLETED", fail: "COMPLETED", error: "COMPLETED", skipped: "SKIPPED" };
       var resultText = { approved: "APROVADO", blocked: "BLOQUEADO", error: "ERRO", not_scanned: "AGUARDANDO SCAN" };
       var headlines = {
         approved: "Publicação liberada",
@@ -191,7 +191,6 @@
 
       function cardLine(scanner, info) {
         if (info.status === "skipped") return "Não executado";
-        if (info.status === "error" && !info.total_findings) return "Falha técnica";
         var own = (summary.findings || []).filter(function (item) { return item.scanner === scanner; });
         if (scanner === "gitleaks") {
           var secrets = info.total_findings || 0;
@@ -251,7 +250,7 @@
           card.type = "button";
           card.className = "card" + (state.scanner === scanner ? " active" : "");
           card.appendChild(el("div", "eyebrow", scannerNames[scanner] || scanner));
-          card.appendChild(el("div", "badge " + info.status, statusText[info.status] || info.status));
+          card.appendChild(el("div", "badge " + (info.status === "skipped" ? "skipped" : "completed"), statusText[info.status] || info.status));
           card.appendChild(el("div", "count", cardLine(scanner, info)));
           if (scanner === "sca") {
             [ ["version_risk", "Version Risk"], ["license", "Licensing"] ].forEach(function (part) {
@@ -262,7 +261,7 @@
             });
           }
           card.appendChild(el("div", "count", Number(info.duration_seconds || 0).toFixed(1) + "s"));
-          if (info.error) card.appendChild(el("p", "empty", info.error));
+          if (diagnosticText(info)) card.appendChild(el("p", "empty", "Diagnóstico" + ": " + diagnosticText(info)));
           card.addEventListener("click", function () {
             state.scanner = state.scanner === scanner ? "all" : scanner;
             render();
@@ -312,13 +311,17 @@
         host.appendChild(renderSection("Informações", findings.filter(isInfo), "Nenhuma informação adicional."));
       }
 
+      function diagnosticText(info) {
+        return (info.diagnostic || {}).summary || info.error || (info.status === "error" ? "A verificação não pôde ser concluída. Consulte os eventos do scan." : "");
+      }
+
       function renderExecuted() {
         var section = document.getElementById("executed");
         clear(section);
         section.appendChild(el("h2", null, "Scanners executados"));
         var table = document.createElement("table");
         var head = document.createElement("tr");
-        ["Scanner", "Status", "Total", "Bloqueantes", "Não bloqueantes", "Detalhe"].forEach(function (label) {
+        ["Scanner", "Status", "Total", "Bloqueantes", "Não bloqueantes", "Diagnóstico"].forEach(function (label) {
           head.appendChild(el("th", null, label));
         });
         table.appendChild(head);
@@ -326,7 +329,7 @@
           var info = (summary.scanners || {})[scanner] || {};
           var row = document.createElement("tr");
           var name = scannerNames[scanner] || scanner;
-          [name, statusText[info.status] || info.status, info.total_findings || 0, info.blocking_findings || 0, info.warning_findings || 0, info.error || ""].forEach(function (value) {
+          [name, statusText[info.status] || info.status, info.total_findings || 0, info.blocking_findings || 0, info.warning_findings || 0, diagnosticText(info)].forEach(function (value) {
             row.appendChild(el("td", null, String(value)));
           });
           table.appendChild(row);

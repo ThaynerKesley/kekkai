@@ -160,7 +160,7 @@ def execute(api, target: Path, config: dict, requested_ai: bool = False, *, on_e
         result.update(executed=executed, duration_seconds=round(end - begin, 3), started_seconds=round(begin - started, 3), ended_seconds=round(end - started, 3))
         if on_event:
             on_event({"kind": "scanner_finished", "scanner": name, "status": result["status"],
-                      "findings": result["total_findings"], "duration_seconds": result["duration_seconds"], "diagnostic": result.get("diagnostic")})
+                      "findings": result["total_findings"], "duration_seconds": result["duration_seconds"], "diagnostic": result.get("diagnostic"), "error": result.get("error")})
         return result
     parallel = config["performance"]["parallel"]
     workers = config["performance"]["max_workers"] if parallel else 1
@@ -182,7 +182,7 @@ def execute(api, target: Path, config: dict, requested_ai: bool = False, *, on_e
               ended_seconds=round(time.perf_counter() - started, 3), executed=ai["status"] != "skipped")
     if on_event:
         on_event({"kind": "scanner_finished", "scanner": "ai", "status": ai["status"],
-                  "findings": ai["total_findings"], "duration_seconds": ai["duration_seconds"], "diagnostic": ai.get("diagnostic")})
+                  "findings": ai["total_findings"], "duration_seconds": ai["duration_seconds"], "diagnostic": ai.get("diagnostic"), "error": ai.get("error")})
     by_name["ai"] = ai
     results = scanners.deduplicate([by_name[name] for name in SCANNER_ORDER], api)
     for index, result in enumerate(results):

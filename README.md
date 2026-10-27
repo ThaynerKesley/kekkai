@@ -95,7 +95,7 @@ The complete example is [`.kekkai.example.yml`](.kekkai.example.yml). API keys n
 
 - **Quick:** disables ZAP, AI, and full license scanning; other configured static checks remain available.
 - **Full:** runs enabled checks. The GUI requests and confirms optional AI review; `ai.enabled` alone never sends source.
-- Internal scanner states are `pass`, `warn`, `fail`, `error`, and `skipped`. The interface displays `fail` as **COMPLETED WITH ERROR**; policy blocking is preserved.
+- Internal scanner states are `pass`, `warn`, `fail`, `error`, and `skipped`. Finished checks display **COMPLETED**; technical errors and partial coverage appear in **Diagnostic**. Skipped checks remain **SKIPPED**. Internal statuses and policy blocking are preserved.
 - Overall decisions are `approved`, policy `blocked`, or technical `error`. Technical errors take precedence. Warnings and skipped checks do not by themselves block publication. These are report decisions; closing the GUI does not return a scan result code.
 - A scanner failure does not cancel the remaining checks. Isolated parsing warnings preserve available findings and show partial coverage. Skipped or partial checks must be considered when interpreting approval.
 

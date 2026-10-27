@@ -49,7 +49,7 @@ def fill_row(widget, index, values):
 def color_status(widget, row, status, theme):
     cell = widget.item(row, 1)
     palette = tokens(theme)
-    key = {"pass": "success", "warn": "warning", "fail": "danger", "error": "danger", "skipped": "muted"}.get(status, "text-primary")
+    key = "muted" if status == "skipped" else "text-primary"
     cell.setForeground(QColor(palette[key]))
     font = cell.font()
     font.setBold(True)
@@ -115,7 +115,7 @@ class HomePage(QWidget):
             card.body.addWidget(chart)
             charts.addWidget(card)
         layout.addLayout(charts)
-        self.scanner_table = table(["Scanner", "Status", "Findings", tr("Tempo")])
+        self.scanner_table = table(["Scanner", "Status", "Findings", tr("Tempo"), tr("Diagnóstico")])
         self.scanner_table.setMinimumHeight(340)
         status_card = Card(tr("Última execução"))
         status_card.body.addWidget(self.scanner_table)
@@ -138,7 +138,7 @@ class HomePage(QWidget):
         for index, name in enumerate(engine.SCANNER_ORDER):
             own = (summary or {}).get("scanners", {}).get(name, {})
             fill_row(self.scanner_table, index, [engine.DISPLAY_NAMES[name], engine.STATUS_LABELS.get(own.get("status"), "—"),
-                    own.get("total_findings", "—"), f"{own['duration_seconds']:.1f}s" if "duration_seconds" in own else "—"])
+                    own.get("total_findings", "—"), f"{own['duration_seconds']:.1f}s" if "duration_seconds" in own else "—", engine.diagnostic_message(own)])
             color_status(self.scanner_table, index, own.get("status"), theme)
         self.severity_chart.update_data(summary, theme)
         self.performance_chart.update_data(summary, theme)
@@ -311,10 +311,11 @@ class ScanPage(QWidget):
             color_status(self.scanner_table, row, event["status"], self.owner.theme)
             self.progress.setValue(self.progress.value() + 1)
             self.log.appendPlainText(f"{engine.DISPLAY_NAMES[name]} · {status} · {event['findings']} findings · {event['duration_seconds']:.1f}s")
-            if event.get('diagnostic'):
-                message = event['diagnostic']['summary']
+            message = engine.diagnostic_message(event)
+            if message:
                 item = QTableWidgetItem(message)
                 item.setToolTip(message)
+                item.setForeground(QColor(tokens(self.owner.theme)["warning"]))
                 self.scanner_table.setItem(row, 4, item)
                 self.log.appendPlainText(message)
             self.progress_label.setText(tr("Concluído: ") + engine.DISPLAY_NAMES[name])
@@ -373,8 +374,9 @@ class ScannersPage(QWidget):
                 policy_label.setText(text+tr('\nNão aplicável · projeto não web'))
             own = (summary or {}).get("scanners", {}).get(name, {})
             last_label.setText(tr('Último: {status} · {count} findings · {seconds:.1f}s', status=engine.STATUS_LABELS.get(own.get('status'), tr('não executado')), count=own.get('total_findings', 0), seconds=own.get('duration_seconds', 0)))
-            if own.get('diagnostic'):
-                last_label.setText(last_label.text()+'\n'+own['diagnostic']['summary'])
+            message = engine.diagnostic_message(own)
+            if message:
+                last_label.setText(last_label.text()+'\n'+tr('Diagnóstico')+': '+message)
 
 
 class AIReviewPage(QWidget):

@@ -95,7 +95,7 @@ O exemplo completo está em [`.kekkai.example.yml`](.kekkai.example.yml). Nunca 
 
 - **Quick:** desativa ZAP, IA e análise completa de licenças; mantém as outras verificações estáticas configuradas.
 - **Full:** executa os scanners habilitados. A GUI solicita e confirma a revisão opcional por IA; `ai.enabled` sozinho nunca envia source.
-- Os estados internos são `pass`, `warn`, `fail`, `error` e `skipped`. A interface apresenta `fail` como **COMPLETED WITH ERROR**, preservando o bloqueio da policy.
+- Os estados internos são `pass`, `warn`, `fail`, `error` e `skipped`. Verificações finalizadas aparecem como **COMPLETED**; erros técnicos e cobertura parcial ficam em **Diagnóstico**. Verificações puladas permanecem **SKIPPED**. Os status internos e o bloqueio da policy são preservados.
 - O resultado geral é `approved`, `blocked` por policy ou `error` técnico. Erros técnicos têm precedência. Avisos e verificações puladas não bloqueiam sozinhos. Esses resultados pertencem ao relatório; fechar a GUI não retorna um código de resultado do scan.
 - Uma falha não cancela os demais scanners. Warnings isolados de parsing preservam findings disponíveis e indicam cobertura parcial. Considere verificações parciais/puladas ao interpretar uma aprovação.
 

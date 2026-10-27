@@ -84,7 +84,9 @@ class PublicationTests(unittest.TestCase):
         self.assertEqual(summary['result'],'approved')
         self.assertEqual(engine.RESULT_LABELS['approved'],'APPROVED')
         self.assertEqual(summary['message'],'No issue configured as blocking was identified.')
-        self.assertEqual(engine.STATUS_LABELS['fail'],'COMPLETED WITH ERROR')
+        for status in ('pass', 'warn', 'fail', 'error'):
+            self.assertEqual(engine.STATUS_LABELS[status], 'COMPLETED')
+        self.assertEqual(engine.STATUS_LABELS['skipped'], 'SKIPPED')
 
     def test_english_renderer_does_not_translate_or_execute_user_data(self):
         project='Visão geral </script><script>alert(1)</script>'
