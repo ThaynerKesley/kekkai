@@ -1,10 +1,20 @@
 # Kekkai
 
+<p align="center">
+  <img src="kekkai/assets/logo+nome.png" alt="Kekkai logo" width="320">
+</p>
+
 **A local security workspace for code, dependencies, secrets, YARA rules, and web applications.**
 
 [English](README.md) · [Português (Brasil)](README.pt-BR.md) · [MIT license](LICENSE)
 
 Created by **Thayner Kesley**. Kekkai brings independent security tools into a PySide6 desktop application. It applies your policies, preserves useful partial results, and generates an offline HTML dashboard. Findings are signals to investigate; an approved scan does not prove that software is secure.
+
+## Usage video
+
+[![Watch the Kekkai usage walkthrough on YouTube](https://img.youtube.com/vi/AUUMhQsUFSQ/hqdefault.jpg)](https://youtu.be/AUUMhQsUFSQ)
+
+[Watch the usage walkthrough on YouTube](https://youtu.be/AUUMhQsUFSQ).
 
 ## What it does
 
