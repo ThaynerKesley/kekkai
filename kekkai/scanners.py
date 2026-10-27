@@ -158,7 +158,6 @@ def run_semgrep(api, target: Path, policy: dict, exclusions: Exclusions, owasp: 
                 finding["category"] = "owasp"
                 finding["blocking"] = finding["severity"] in policy["fail_on"]
                 technical.update(owasp_categories=categories, cwe=labels(technical.get("metadata", {}).get("cwe")), evidence="[REDACTED]")
-                finding["recommendation"] = technical.get("metadata", {}).get("recommendation") or finding["recommendation"]
         if owasp:
             for category in info["categories"]:
                 category["findings"] = sum(category["category"] in f["technical"]["owasp_categories"] for f in findings)
@@ -244,9 +243,7 @@ def parse_sca(api, data: dict, policy: dict, target: Path) -> tuple[list[dict], 
                     technical={"license": name, "classification": classification, "package": item.get("PkgName"),
                                "ecosystem": result.get("Type"), "confidence": item.get("Confidence"), "policy_reasons": reasons},
                     plain_message=name, finding_key="license-" + str(item.get("PkgName")) + "-" + name, index=len(findings))
-                finding.update(module="license", title=tr("Licença: ") + name,
-                               description=tr("Classificação da ferramenta: ") + classification + tr(". Indicação de risco; não é parecer jurídico."),
-                               recommendation=tr("Validar a licença conforme a política da organização."), impact=tr("Obrigações e permissões dependem do contexto de uso e distribuição."))
+                finding.update(module="license")
                 findings.append(finding)
     details = {}
     for module in ("version_risk", "license"):
@@ -379,8 +376,7 @@ def run_yara(api, target: Path, policy: dict, exclusions: Exclusions) -> dict:
             finding = api.normalize_finding(scanner="yara", severity=severity, blocking=policy["fail_on_match"], category="yara",
                 location={"file": relative}, technical={"rule": rule.identifier, "namespace": rule.namespace, "tags": list(rule.tags),
                     "metadata": metadata, "offsets": offsets,'rule_origin':entry['origin'],'rule_version':entry['version']}, plain_message="Regra YARA correspondente", finding_key=rule.identifier, index=len(findings))
-            finding.update(rule=rule.identifier, file=relative, tags=list(rule.tags), title="YARA Rules: " + rule.identifier,
-                           description=tr("O arquivo corresponde à regra. Isso é um sinal para investigação, não confirmação automática de malware. Conteúdo do match omitido."), recommendation=tr("Revisar o arquivo e a regra correspondente."))
+            finding.update(rule=rule.identifier, file=relative, tags=list(rule.tags))
             findings.append(finding)
     result = api.make_result("yara", api.status_from_findings(findings), 0, findings)
     if incomplete:

@@ -75,6 +75,122 @@ class GuiTests(unittest.TestCase):
         self.assertIn('Kekkai',self.window.windowTitle())
         self.assertFalse(self.window.windowIcon().isNull())
 
+    def test_home_shortcuts_prepare_scan_without_starting(self):
+        from PySide6.QtWidgets import QPushButton
+        with patch("kekkai.scanners.docker_preflight") as preflight:
+            for name, profile in [("homeQuick", "quick"), ("homeFull", "full")]:
+                self.window.navigate("home")
+                QTest.mouseClick(self.window.findChild(QPushButton, name), Qt.MouseButton.LeftButton)
+                self.assertEqual(self.window.selected_page, "scan")
+                self.assertEqual(self.window.scan_page.profile.currentText(), profile)
+                self.assertFalse(self.window.running())
+                self.assertIsNone(self.window.worker)
+            preflight.assert_not_called()
+        self.assertFalse((self.root / ".security/reports/summary.json").exists())
+        self.assertTrue(self.window.scan_page.start.isEnabled())
+
+    def test_remove_recent_project_preserves_active_project_and_files(self):
+        marker = self.root / "source.py"
+        marker.write_text("KEEP", encoding="utf-8")
+        self.window.preferences.remember(self.root)
+        self.window.refresh()
+        self.window.navigate("projects")
+        page = self.window.pages["projects"]
+        page.list.setCurrentRow(0)
+        QTest.mouseClick(page.remove, Qt.MouseButton.LeftButton)
+        self.assertEqual(page.list.count(), 0)
+        self.assertEqual(Preferences(self.window.preferences.path).data["recent_projects"], [])
+        self.assertEqual(self.window.target, self.root)
+        self.assertEqual(marker.read_text(), "KEEP")
+        self.window.refresh()
+        self.assertEqual(page.list.count(), 0)
+
+    def report_fixture(self):
+        from kekkai import engine
+        results = [engine.make_result(name, "skipped", None, []) for name in engine.SCANNER_ORDER]
+        findings = engine.parse_gitleaks([{"RuleID": "fixture-rule", "Description": "Original scanner description", "File": "source.py", "StartLine": 1}], True, self.root)
+        results[1] = engine.make_result("gitleaks", "fail", 1, findings)
+        summary = engine.build_summary(self.config, self.root, "Export fixture", results)
+        # A second location checks that a PDF is complete even when the visible report is filtered.
+        extra = deepcopy(findings[0])
+        extra.update(id="fixture-second-location", location={"file": "second.py", "line": 2})
+        summary["findings"].append(extra)
+        return summary
+
+    def test_browser_and_html_export_use_selected_snapshot(self):
+        from kekkai import engine
+        from kekkai.core.storage import ReportStore
+        summary = self.report_fixture()
+        dirs = engine.prepare_output_dirs(self.root, ".security")
+        archived = ReportStore(dirs["root"]).archive(summary, dirs["reports"], None)
+        self.window.refresh_reports()
+        self.window.pages["reports"].list.selectRow(0)
+        with patch("kekkai.gui.window.QDesktopServices.openUrl", return_value=True) as opened:
+            self.window.open_report("browser")
+        url = opened.call_args.args[0]
+        html = Path(url.toLocalFile()).read_text(encoding="utf-8")
+        self.assertIn("Export fixture", html)
+        self.assertIn('class="standalone"', html)
+        self.assertIn("Content-Security-Policy", html)
+        self.assertTrue((archived / "summary.json").is_file())
+        exported = self.root / "selected-report.html"
+        with patch.object(QFileDialog, "getSaveFileName", return_value=(str(exported), "HTML (*.html)")):
+            self.window.open_report("html")
+        self.assertEqual(exported.read_text(encoding="utf-8"), html)
+
+    def test_scan_completion_can_open_browser_without_changing_app_page(self):
+        from kekkai.core.service import run_scan
+        outcome = run_scan(self.root, deepcopy(configuration.DEFAULTS))
+        self.window.navigate("scan")
+        self.window.scan_page.open_dashboard.setChecked(True)
+        self.window.scan_page.report_viewer.setCurrentIndex(1)
+        with patch("kekkai.gui.window.QDesktopServices.openUrl", return_value=True) as opened:
+            self.window.scan_completed(outcome)
+        self.assertEqual(self.window.selected_page, "scan")
+        self.assertTrue(Path(opened.call_args.args[0].toLocalFile()).is_file())
+
+    def test_pdf_export_has_complete_snapshot_without_changing_visible_view(self):
+        summary = self.report_fixture()
+        dashboard = self.window.pages["dashboard"]
+        dashboard.show_summary({**summary, "project": "Visible dashboard"}, "dark")
+        destination = self.root / "report.pdf"
+        with patch.object(QFileDialog, "getSaveFileName", return_value=(str(destination), "PDF (*.pdf)")):
+            self.window.export_dashboard("pdf", summary)
+        self.wait_for(lambda: self.window.pdf_export is None, 30000)
+        self.assertTrue(destination.read_bytes().startswith(b"%PDF-"))
+        self.assertGreater(destination.stat().st_size, 10000)
+        from PySide6.QtPdf import QPdfDocument
+        from PySide6.QtCore import QBuffer, QIODevice
+        buffer = QBuffer(self.window)
+        buffer.setData(destination.read_bytes())
+        buffer.open(QIODevice.OpenModeFlag.ReadOnly)
+        document = QPdfDocument(self.window)
+        try:
+            document.load(buffer)
+            self.assertEqual(document.error(), QPdfDocument.Error.None_)
+            text = "\n".join(document.getAllText(page).text() for page in range(document.pageCount()))
+            # PDF extractors can omit spaces from tightly kerned headings.
+            self.assertIn("Exportfixture", "".join(text.split()))
+            self.assertIn("source.py", text)
+            self.assertIn("second.py", text)
+        finally:
+            document.close()
+            buffer.close()
+        self.assertEqual(dashboard.summary["project"], "Visible dashboard")
+        self.assertEqual(dashboard.theme, "dark")
+
+    def test_failed_pdf_does_not_replace_an_existing_file(self):
+        from kekkai.gui.report_view import PdfExport
+        destination = self.root / "existing.pdf"
+        destination.write_bytes(b"KEEP")
+        job = PdfExport(self.window)
+        job.destination = destination
+        complete = []
+        job.finished.connect(lambda path, success: complete.append(success))
+        job.printed(b"")
+        self.assertEqual(complete, [False])
+        self.assertEqual(destination.read_bytes(), b"KEEP")
+
     def test_english_navigation_forms_and_live_dashboard(self):
         from kekkai.i18n import set_language
         other=MainWindow(self.window.preferences,self.root,language='en')

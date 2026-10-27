@@ -1,5 +1,6 @@
 """Desktop coordinator. Configuration and events are the boundary to the core."""
 from copy import deepcopy
+from hashlib import sha256
 from pathlib import Path
 
 from PySide6.QtCore import QUrl, QSize, Slot
@@ -15,7 +16,7 @@ from ..dashboard import render
 from ..themes import tokens
 from .pages import HomePage, ScanPage, ScannersPage, AIReviewPage, SettingsPage, ProjectsPage, ReportsPage, AboutPage
 from .policies import PolicyDialog
-from .report_view import DashboardPage
+from .report_view import DashboardPage, PdfExport
 from .widgets import button, icon, label, logo, wordmark
 from .worker import ScanWorker, ProbeWorker, RuleManagerWorker
 from .yara_page import YaraRulesPage
@@ -44,6 +45,7 @@ class MainWindow(QMainWindow):
         self.probes = {}
         self.rule_manager=YaraRuleManager()
         self.rule_worker=None
+        self.pdf_export = None
         self.close_after_probes = False
         self.close_after_scan = False
         self.selected_page = "home"
@@ -131,6 +133,7 @@ class MainWindow(QMainWindow):
         except (OSError,ValueError,RuleManagerError):
             self.pages['yara_rules'].feedback.setText(tr('Manifesto YARA inválido; verifique a biblioteca local.'))
         self.scan_page.open_dashboard.setChecked(self.preferences.data["open_dashboard"])
+        self.scan_page.report_viewer.setCurrentIndex(self.scan_page.report_viewer.findData(self.preferences.data["report_viewer"]))
         self.select_project(self.target, remember=False)
         self.apply_theme(self.theme)
         self.navigate("home")
@@ -345,9 +348,19 @@ class MainWindow(QMainWindow):
         self.ai_page.enabled.setChecked(self.requested_ai)
         self.ai_page.enabled.blockSignals(False)
         self.ai_page.enabled.setEnabled(self.scan_page.profile.currentText() != "quick" and not self.running())
-        self.pages["projects"].list.clear()
-        self.pages["projects"].list.addItems([str(self.target), *[x for x in self.preferences.data["recent_projects"] if x != str(self.target)]])
+        self.pages["projects"].refresh(self.preferences.data["recent_projects"])
         self.refresh_reports()
+
+    def remove_recent_project(self):
+        selected = self.pages["projects"].list.currentItem()
+        if selected is None:
+            return
+        try:
+            self.preferences.forget(selected.text())
+            self.pages["projects"].refresh(self.preferences.data["recent_projects"])
+            self.notice(tr("Projeto removido dos recentes. Os arquivos foram preservados."))
+        except (OSError, ValueError):
+            self.notice(tr("Não foi possível atualizar a lista de projetos recentes."), error=True)
 
     def refresh_reports(self):
         try:
@@ -466,10 +479,11 @@ class MainWindow(QMainWindow):
             if not Path(directory).is_dir():
                 raise ValueError(tr("Diretório inválido."))
             self.preferences.data.update(default_directory=directory, open_dashboard=self.settings_page.open_dashboard.isChecked(), scan_defaults=config,
-                                         language=self.settings_page.language.currentData())
+                                         language=self.settings_page.language.currentData(), report_viewer=self.settings_page.report_viewer.currentData())
             self.preferences.save()
             self.config = config
             self.scan_page.open_dashboard.setChecked(self.preferences.data["open_dashboard"])
+            self.scan_page.report_viewer.setCurrentIndex(self.scan_page.report_viewer.findData(self.preferences.data["report_viewer"]))
             self.refresh()
             self.notice(tr("Preferências locais salvas. Use Salvar configuração para atualizar o YAML do projeto."))
             if self.preferences.data['language'] != self.language:
@@ -513,6 +527,15 @@ class MainWindow(QMainWindow):
             self.ai_page.providers[name]["status"].setText(tr("Chave removida do cofre"))
         except CredentialError:
             self.notice(tr("Não foi possível remover a credencial do cofre Windows."), error=True)
+
+    def prepare_scan(self, profile):
+        if self.running():
+            self.notice(tr("Um scan já está em andamento."))
+            self.navigate("scan")
+            return
+        self.scan_page.profile.setCurrentText(profile)
+        self.navigate("scan")
+        self.scan_page.start.setFocus()
 
     def start_scan(self, profile=None):
         if self.rule_worker is not None:
@@ -603,7 +626,10 @@ class MainWindow(QMainWindow):
         self.notice(tr("Scan concluído: ") + engine.RESULT_LABELS[self.summary["result"]])
         self.scan_page.progress_label.setText(tr("Scan concluído · ") + engine.RESULT_LABELS[self.summary["result"]])
         if self.scan_page.open_dashboard.isChecked():
-            self.show_dashboard()
+            if self.scan_page.report_viewer.currentData() == "browser":
+                self.export_dashboard("browser", self.summary)
+            else:
+                self.show_dashboard()
 
     @Slot()
     def scan_finished(self):
@@ -630,6 +656,9 @@ class MainWindow(QMainWindow):
             self.notice(tr("Selecione uma execução disponível."))
             return
         path = Path(selected["path"])
+        if action in {"browser", "html", "pdf"}:
+            self.export_dashboard(action, selected["summary"])
+            return
         if action == "dashboard":
             self.pages["dashboard"].show_summary(selected["summary"], self.theme)
             self.selected_page = "dashboard"
@@ -667,6 +696,58 @@ class MainWindow(QMainWindow):
             except (OSError,ValueError):
                 self.notice(tr('Não foi possível excluir o relatório. Verifique paths e permissões.'),error=True)
 
+    def export_dashboard(self, action, summary):
+        if not summary or summary.get("result") == "not_scanned":
+            self.notice(tr("Execute um scan ou selecione um relatório disponível."))
+            return
+        if action == "pdf" and self.pdf_export is not None:
+            self.notice(tr("Aguarde a exportação do PDF em andamento."))
+            return
+        pdf = None
+        try:
+            if action == "browser":
+                content = render(summary, self.theme, language=self.language)
+                identifier = sha256(content.encode("utf-8")).hexdigest()[:20]
+                destination = self.output_root() / "dashboard" / "browser" / (identifier + ".html")
+                engine.write_text(destination, content)
+                if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(destination))):
+                    raise OSError("Browser unavailable")
+                return
+            if action not in {"html", "pdf"}:
+                return
+            title = tr("Exportar PDF") if action == "pdf" else tr("Exportar HTML")
+            kind = "PDF (*.pdf)" if action == "pdf" else "HTML (*.html)"
+            filename, _ = QFileDialog.getSaveFileName(self, title, str(self.target / ("kekkai-report." + action)), kind)
+            if not filename:
+                return
+            destination = Path(filename)
+            if destination.suffix.lower() != "." + action:
+                destination = destination.with_name(destination.name + "." + action)
+                if destination.exists():
+                    answer = QMessageBox.question(self, tr("Substituir arquivo"), tr("O destino já existe. Substituir o arquivo?"), QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
+                    if answer != QMessageBox.StandardButton.Yes:
+                        return
+            if action == "html":
+                engine.write_text(destination, render(summary, self.theme, language=self.language))
+                self.notice(tr("Relatório exportado com sucesso."))
+            else:
+                pdf = PdfExport(self)
+                self.pdf_export = pdf
+                pdf.finished.connect(self.pdf_exported)
+                pdf.start(deepcopy(summary), destination, self.language)
+                self.notice(tr("Gerando PDF completo. Você pode continuar usando o Kekkai."))
+        except (OSError, ValueError):
+            if pdf is not None:
+                pdf.finished.disconnect(self.pdf_exported)
+                pdf.finish(False)
+                self.pdf_export = None
+            self.notice(tr("Não foi possível abrir ou exportar o relatório. Verifique o destino e as permissões."), error=True)
+
+    @Slot(str, bool)
+    def pdf_exported(self, destination, success):
+        self.pdf_export = None
+        self.notice(tr("PDF exportado com sucesso: ") + destination if success else tr("Não foi possível gerar o PDF. O arquivo anterior foi preservado."), error=not success)
+
     def resizeEvent(self, event):
         super().resizeEvent(event)
         if not hasattr(self, "navigation"):
@@ -692,6 +773,10 @@ class MainWindow(QMainWindow):
                 self.cancel_scan()
             event.ignore()
         else:
+            if self.pdf_export is not None:
+                self.pdf_export.finished.disconnect(self.pdf_exported)
+                self.pdf_export.finish(False)
+                self.pdf_export = None
             self.ai_page.clear_keys()
             self.pages["dashboard"].cleanup()
             event.accept()

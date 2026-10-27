@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'; connect-src 'none'">
   <title>Kekkai</title>
   <link rel="icon" href="__KEKKAI_ICON__">
   <style>__KEKKAI_STYLE__</style>
@@ -22,7 +23,10 @@
         <h1 id="project-name">Kekkai</h1>
         <p class="meta" id="meta"></p>
       </div>
-      <button class="theme" id="theme" type="button">Tema escuro</button>
+      <div class="report-actions">
+        <button class="theme" id="print-report" type="button">Imprimir / Salvar PDF</button>
+        <button class="theme" id="theme" type="button">Tema escuro</button>
+      </div>
     </header>
     <section class="banner" id="banner"></section>
     <section class="stats" id="stats"></section>
@@ -524,6 +528,28 @@
         document.querySelectorAll(".report-nav a").forEach(function(other) { other.classList.toggle("active", other === link); });
       }); });
       document.getElementById("view").addEventListener("change", function(event) { state.view = event.target.value; renderFindings(); });
+      window.kekkaiPreparePrint = function () {
+        state.filter = "all";
+        state.scanner = "all";
+        state.query = "";
+        state.view = "technical";
+        render();
+        document.documentElement.setAttribute("data-theme", "light");
+        return true;
+      };
+      var beforePrintState;
+      var beforePrintTheme;
+      window.addEventListener("beforeprint", function () {
+        beforePrintState = Object.assign({}, state);
+        beforePrintTheme = document.documentElement.getAttribute("data-theme");
+        window.kekkaiPreparePrint();
+      });
+      window.addEventListener("afterprint", function () {
+        if (beforePrintState) state = beforePrintState;
+        applyTheme(beforePrintTheme || initial);
+        render();
+      });
+      document.getElementById("print-report").addEventListener("click", function () { window.print(); });
       render();
     }());
   </script>

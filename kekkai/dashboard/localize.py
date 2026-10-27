@@ -6,6 +6,23 @@ from html import escape, unescape
 
 from ..i18n import translate
 
+
+def localize_summary(summary: dict, language: str) -> dict:
+    # Localize only Kekkai-owned narratives. Original scanner/AI/user data is retained.
+    from ..engine import executive_copy, RESULT_MESSAGES
+
+    result = {**summary, "language": language}
+    if summary.get("result") in RESULT_MESSAGES:
+        message = dict.__getitem__(RESULT_MESSAGES, summary["result"])
+        result["message"] = translate(message, language)
+    findings = []
+    for finding in summary.get("findings", []):
+        if finding.get("scanner") in {"gitleaks", "semgrep", "owasp", "sca", "trivy", "zap", "yara"} and not finding.get("ai_assisted"):
+            finding = {**finding, **executive_copy(finding["scanner"], finding.get("technical", {}), "", language=language)}
+        findings.append(finding)
+    result["findings"] = findings
+    return result
+
 _QUOTED = re.compile(r'"(?:\\.|[^"\\])*"|\x27(?:\\.|[^\x27\\])*\x27')
 
 

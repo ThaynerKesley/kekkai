@@ -88,4 +88,31 @@ footer { margin-top: 28px; }
 @media (max-width: 720px) { .report-nav { display: none; } .page { margin: 0; padding: 18px; } header.top { align-items: start; } .stats, .charts, .cards { grid-template-columns: 1fr; } .chart-panel:first-child { grid-column: auto; } dl { grid-template-columns: 1fr; } .banner, .panel { padding: 18px; } }
 @media (max-width: 900px) { .embedded .stats { grid-template-columns: repeat(2, 1fr); } .embedded .charts { grid-template-columns: 1fr 1fr; } .embedded .chart-panel:first-child { grid-column: 1/-1; } }
 @media (max-width: 650px) { .embedded .stats, .embedded .charts { grid-template-columns: 1fr; } .embedded .chart-panel:first-child { grid-column: auto; } }
-@media print { .report-nav, .theme, .toolbar, .filter-section { display: none; } .page { margin: 0; padding: 10px; } .panel, .card { break-inside: avoid; } body { background: var(--surface); } }
+.report-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+@page {
+  @bottom-center {
+    content: "Kekkai · Thayner Kesley · " counter(page) " / " counter(pages);
+    font-family: 'Segoe UI', sans-serif;
+    font-size: 8pt;
+    color: #59665f;
+  }
+}
+@media print {
+  .report-nav, .theme, .toolbar, .filter-section, .report-actions, footer { display: none; }
+  body { background: white; color: #18202b; font-size: 10pt; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .page, .embedded .page { margin: 0; padding: 0; width: auto; max-width: none; }
+  .panel { break-inside: auto; overflow: visible; padding: 14px; }
+  .finding, .card, .chart-panel, .stat { break-inside: avoid; }
+  h2, h3 { break-after: avoid; }
+  h1 { letter-spacing: normal; }
+  .stats, .embedded .stats { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+  .stat { padding: 12px; } .stat strong { font-size: 26px; }
+  .charts, .embedded .charts { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .chart-panel:first-child, .embedded .chart-panel:first-child { grid-column: auto; }
+  .chart-panel { padding: 12px; } .chart-panel h2 { font-size: 12px; }
+  .cards { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  details > summary { display: none; }
+  dl { grid-template-columns: 130px minmax(0, 1fr); font-size: 9pt; }
+  th, td { overflow-wrap: anywhere; padding: 7px; }
+  pre { font-size: 8pt; line-height: 1.3; }
+}

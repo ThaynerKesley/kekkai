@@ -23,7 +23,7 @@ class Preferences:
     def __init__(self, path: Path | None = None):
         self.path = path or user_data_dir() / "preferences.json"
         self.data = {"theme": "dark", "language": "pt_BR", "default_directory": str(Path.cwd()), "open_dashboard": True,
-                     "recent_projects": [], "scan_defaults": {}, "profiles": {}}
+                     "recent_projects": [], "scan_defaults": {}, "profiles": {}, "report_viewer": "kekkai"}
         if self.path.is_file():
             try:
                 loaded = json.loads(self.path.read_text(encoding="utf-8"))
@@ -41,6 +41,7 @@ class Preferences:
         data = self.data
         valid = (isinstance(data["theme"], str) and isinstance(data["language"], str) and data["language"] in LANGUAGES and isinstance(data["default_directory"], str)
                  and type(data["open_dashboard"]) is bool and isinstance(data["recent_projects"], list)
+                 and isinstance(data["report_viewer"], str) and data["report_viewer"] in {"kekkai", "browser"}
                  and all(isinstance(x, str) for x in data["recent_projects"])
                  and isinstance(data["scan_defaults"], dict) and isinstance(data["profiles"], dict))
         if not valid:
@@ -62,6 +63,18 @@ class Preferences:
         recent = [str(target), *[str(x) for x in self.data["recent_projects"] if str(x) != str(target)]]
         self.data["recent_projects"] = recent[:20]
         self.save()
+
+    def forget(self, target: str):
+        previous = self.data["recent_projects"]
+        key = os.path.normcase(os.path.normpath(target))
+        self.data["recent_projects"] = [
+            value for value in previous if os.path.normcase(os.path.normpath(value)) != key
+        ]
+        try:
+            self.save()
+        except (OSError, ValueError):
+            self.data["recent_projects"] = previous
+            raise
 
 
 def save_project_config(target: Path, config: dict):

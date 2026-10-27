@@ -62,6 +62,14 @@ def wrap_layout(layout):
     return widget
 
 
+def report_viewer_selector():
+    selector = QComboBox()
+    selector.addItem("Kekkai", "kekkai")
+    selector.addItem(tr("Navegador"), "browser")
+    selector.setAccessibleName(tr("Abrir relatório em"))
+    return selector
+
+
 class HomePage(QWidget):
     def __init__(self, window):
         super().__init__()
@@ -94,8 +102,8 @@ class HomePage(QWidget):
         row.addWidget(project, 3)
         actions = Card(tr("Iniciar uma verificação"))
         actions.body.addWidget(label(tr("Quick prioriza verificações estáticas. Full inclui todos os scanners configurados. IA exige uma solicitação explícita."), "muted", wrap=True))
-        actions.body.addWidget(button("Quick scan", lambda: window.start_scan("quick"), primary=True, name="homeQuick"))
-        actions.body.addWidget(button("Full scan", lambda: window.start_scan("full"), name="homeFull"))
+        actions.body.addWidget(button("Quick scan", lambda: window.prepare_scan("quick"), primary=True, name="homeQuick"))
+        actions.body.addWidget(button("Full scan", lambda: window.prepare_scan("full"), name="homeFull"))
         actions.body.addWidget(button(tr("Abrir dashboard"), window.show_dashboard))
         row.addWidget(actions, 2)
         layout.addLayout(row)
@@ -197,11 +205,15 @@ class ScanPage(QWidget):
         self.open_dashboard = QCheckBox(tr("Abrir dashboard ao concluir"))
         self.open_dashboard.setChecked(True)
         options.addWidget(self.open_dashboard)
+        self.report_viewer = report_viewer_selector()
+        self.open_dashboard.toggled.connect(self.report_viewer.setEnabled)
+        options.addWidget(self.report_viewer)
         options.addStretch()
         options.addWidget(button(tr("Salvar perfil"), window.save_profile))
         setup.body.addLayout(options)
         controls = QHBoxLayout()
-        self.start = button(tr("Iniciar scan"), lambda: window.start_scan(), primary=True, name="startScan")
+        self.start = button("START", lambda: window.start_scan(), primary=True, name="startScan")
+        self.start.setAccessibleName(tr("Iniciar scan"))
         self.cancel = button(tr("Cancelar scan"), window.cancel_scan, name="cancelScan")
         self.cancel.setEnabled(False)
         controls.addWidget(self.start)
@@ -521,10 +533,14 @@ class SettingsPage(QWidget):
         self.default_directory = QLineEdit()
         self.project_name = QLineEdit()
         self.open_dashboard = QCheckBox(tr("Abrir dashboard ao final do scan"))
+        self.report_viewer = report_viewer_selector()
+        self.open_dashboard.toggled.connect(self.report_viewer.setEnabled)
+        self.report_viewer.setEnabled(self.open_dashboard.isChecked())
         form.addRow(tr("Tema"), self.theme)
         form.addRow(tr("Diretório inicial"), self.default_directory)
         form.addRow(tr("Nome do projeto"), self.project_name)
         form.addRow(self.open_dashboard)
+        form.addRow(tr("Abrir relatório em"), self.report_viewer)
         card.body.addLayout(form)
         layout.addWidget(card)
         scan = Card(tr("Scan e performance"))
@@ -577,6 +593,7 @@ class SettingsPage(QWidget):
         self.default_directory.setText(preferences["default_directory"])
         self.project_name.setText(config["project"]["name"])
         self.open_dashboard.setChecked(preferences["open_dashboard"])
+        self.report_viewer.setCurrentIndex(self.report_viewer.findData(preferences["report_viewer"]))
         self.excludes.setPlainText("\n".join(config["scan"]["exclude_paths"]))
         self.parallel.setChecked(config["performance"]["parallel"])
         self.workers.setValue(config["performance"]["max_workers"])
@@ -613,7 +630,19 @@ class ProjectsPage(QWidget):
         card.body.addWidget(self.list)
         card.body.addWidget(button(tr("Abrir projeto selecionado"), lambda: window.select_project(Path(self.list.currentItem().text())) if self.list.currentItem() else window.choose_project()))
         card.body.addWidget(button(tr("Adicionar projeto"), window.choose_project, primary=True))
+        self.remove = button(tr("Remover dos recentes"), window.remove_recent_project, name="removeRecentProject")
+        self.remove.setToolTip(tr("Remove apenas o atalho. Os arquivos do projeto permanecem no computador."))
+        self.remove.setEnabled(False)
+        self.list.itemSelectionChanged.connect(lambda: self.remove.setEnabled(self.list.currentItem() is not None))
+        card.body.addWidget(self.remove)
+        self.empty = label(tr("Nenhum projeto recente."), "muted")
+        card.body.addWidget(self.empty)
         layout.addWidget(card, 1)
+
+    def refresh(self, recent):
+        self.list.clear()
+        self.list.addItems(recent)
+        self.empty.setVisible(not recent)
 
 
 class ReportsPage(QWidget):
@@ -632,9 +661,14 @@ class ReportsPage(QWidget):
         self.path = label(tr("Nenhum relatório selecionado"), "muted", wrap=True)
         self.list.itemSelectionChanged.connect(self.selection_changed)
         card.body.addWidget(self.path)
-        actions = QHBoxLayout()
-        for text, kind in [(tr("Abrir summary.json"), "summary"), ("Raw reports", "raw"), ("Dashboard", "dashboard"), (tr("Exportar ZIP"), "export"),(tr('Excluir relatório'),'delete')]:
-            actions.addWidget(button(text, lambda checked=False, action=kind: window.open_report(action)))
+        actions = QGridLayout()
+        for index, (text, kind) in enumerate([
+            (tr("Dashboard no Kekkai"), "dashboard"), (tr("Abrir no navegador"), "browser"),
+            (tr("Exportar HTML"), "html"), (tr("Exportar PDF"), "pdf"),
+            (tr("Abrir summary.json"), "summary"), ("Raw reports", "raw"),
+            (tr("Exportar ZIP"), "export"), (tr("Excluir relatório"), "delete"),
+        ]):
+            actions.addWidget(button(text, lambda checked=False, action=kind: window.open_report(action), name="report_" + kind), index // 3, index % 3)
         card.body.addLayout(actions)
         self.empty = label(tr("Execute um scan com reporting habilitado para criar o primeiro relatório."), "muted", wrap=True)
         card.body.addWidget(self.empty)

@@ -75,8 +75,9 @@ class PublicationTests(unittest.TestCase):
         with self.assertRaises(ValueError):ai_review.load_guide(project,options,authorized_path=str(local),protected={'notes.md'})
 
     def test_language_preference_roundtrip_and_stable_machine_codes(self):
-        prefs=Preferences(self.root/'prefs.json');prefs.data['language']='en';prefs.save()
+        prefs=Preferences(self.root/'prefs.json');prefs.data['language']='en';prefs.data['report_viewer']='browser';prefs.save()
         self.assertEqual(Preferences(prefs.path).data['language'],'en')
+        self.assertEqual(Preferences(prefs.path).data['report_viewer'],'browser')
         set_language('en')
         self.assertEqual(tr('Visão geral'),'Overview')
         summary=run_scan(self.root,deepcopy(configuration.DEFAULTS))['summary']
@@ -95,6 +96,40 @@ class PublicationTests(unittest.TestCase):
         self.assertEqual(json.loads(payload)['project'],project)
         self.assertNotIn('</script>',payload)
         self.assertIn('Visão geral',payload)
+
+    def test_finding_narrative_follows_language_including_existing_reports(self):
+        original = {"RuleID": "test-rule", "File": "source.py", "StartLine": 1, "Description": "Original scanner wording"}
+        finding = engine.parse_gitleaks([original], True, self.root)[0]
+        summary = {"result": "blocked", "project": "Segredo exposto no projeto", "findings": [finding]}
+        english = json.loads(render(summary, language="en").split('id="kekkai-summary">', 1)[1].split('</script>', 1)[0])
+        localized = english["findings"][0]
+        self.assertEqual(localized["title"], "Exposed secret in project")
+        self.assertIn("A possible secret", localized["description"])
+        self.assertIn("Exposed credentials", localized["impact"])
+        self.assertIn("Remove the secret", localized["recommendation"])
+        self.assertEqual(localized["technical"]["description"], "Original scanner wording")
+        self.assertEqual(english["project"], summary["project"])
+        portuguese = json.loads(render(english, language="pt_BR").split('id="kekkai-summary">', 1)[1].split('</script>', 1)[0])
+        self.assertEqual(portuguese["findings"][0]["title"], "Segredo exposto no projeto")
+        self.assertIn("Foi encontrado", portuguese["findings"][0]["description"])
+        self.assertEqual(summary["findings"][0]["title"], "Segredo exposto no projeto")
+        technical = {"package": "fixture-dependency", "severity": "HIGH"}
+        self.assertIn("severidade alta", engine.executive_copy("sca", technical, "", language="pt_BR")["description"])
+        self.assertIn("known high", engine.executive_copy("sca", technical, "", language="en")["description"])
+
+    def test_external_rule_prose_is_kept_in_technical_details(self):
+        data = {"results": [{"check_id": "test-rule", "path": "source.py", "start": {"line": 1}, "extra": {"severity": "ERROR", "message": "Original scanner wording"}}]}
+        finding = engine.parse_semgrep(data, True, self.root)[0]
+        self.assertIn("Consulte a mensagem original", finding["description"])
+        self.assertEqual(finding["technical"]["message"], "Original scanner wording")
+
+    def test_forget_recent_project_restores_preferences_on_write_failure(self):
+        from unittest.mock import patch
+        preferences = Preferences(self.root / "prefs.json")
+        preferences.remember(self.root)
+        with patch.object(preferences, "save", side_effect=OSError("No write")), self.assertRaises(OSError):
+            preferences.forget(str(self.root))
+        self.assertEqual(preferences.data["recent_projects"], [str(self.root)])
 
     def test_report_delete_preserves_other_runs_source_and_cache(self):
         project=self.root/'project';project.mkdir();(project/'source.py').write_text('SOURCE')

@@ -80,7 +80,7 @@ The application package is `kekkai`; `python kekkai.py` and `python -m kekkai` b
 1. Open a project in the desktop application. Choose **Local code / non-web** or **Web application**. Imported projects without this setting prompt for it.
 2. Review **Scanners**, exclusions, and policies. New desktop projects initially enable the static checks; an existing project YAML takes precedence.
 3. Install **Core** in **YARA Rules**, or import your own rules, then enable the YARA scanner when desired.
-4. Run **Quick** for static checks or **Full** for all selected checks. AI always requires a separate request and confirmation.
+4. Use **Quick scan** or **Full scan** on the overview to open the Scan page with that profile. Finish configuring the project and scanners, then click **START**. These shortcuts never start a scan. AI always requires a separate request and confirmation.
 5. Inspect findings, partial coverage, and diagnostics. Save the project configuration explicitly if you want to persist it to YAML.
 
 Use **Save configuration** in the GUI to write `.kekkai.yml` inside the selected project. For a prepared configuration, copy the reviewed example:
@@ -98,6 +98,8 @@ The complete example is [`.kekkai.example.yml`](.kekkai.example.yml). API keys n
 - Internal scanner states are `pass`, `warn`, `fail`, `error`, and `skipped`. The interface displays `fail` as **COMPLETED WITH ERROR**; policy blocking is preserved.
 - Overall decisions are `approved`, policy `blocked`, or technical `error`. Technical errors take precedence. Warnings and skipped checks do not by themselves block publication. These are report decisions; closing the GUI does not return a scan result code.
 - A scanner failure does not cancel the remaining checks. Isolated parsing warnings preserve available findings and show partial coverage. Skipped or partial checks must be considered when interpreting approval.
+
+Recent projects can be removed from **Projects → Remove from recents**. This changes only the local shortcut list; removing the active project keeps it open and preserves its files and reports.
 
 ## Configuration
 
@@ -163,7 +165,13 @@ Default project output:
   history/<timestamp-id>/      # Desktop snapshots; raw files are flattened here
 ```
 
-The desktop lists the current result and archived runs, opens their summaries/raw files/dashboards, exports ZIPs, and deletes selected reports after confirmation. Deleting the current result does not delete separate history; deleting one snapshot preserves other runs, source, and cache. Completed GUI runs archive their results in the local report history.
+The desktop lists the current result and archived runs. Select an entry in **Reports** to open its dashboard in Kekkai or in your default browser, export a standalone **HTML**, generate a **PDF**, open summary/raw data, export a ZIP, or delete the report after confirmation. Deleting the current result does not delete separate history; deleting one snapshot preserves other runs, source, and cache. Completed GUI runs archive their results in the local report history.
+
+On the Scan page, **Open dashboard when complete** lets you choose **Kekkai** or **Browser**. Save the default viewer in **Settings → Open report in**.
+
+Browser/HTML reports use the Kekkai dashboard with embedded branding, charts, search, filters, grouping, technical detail and light/dark themes. The HTML is self-contained and requires no server or internet connection. Export actions are also available above the integrated dashboard. PDF exports use a separate light A4 layout and include every finding and its technical details, regardless of the current on-screen filters. Generating a PDF does not change the dashboard you are viewing. Browser reports also provide **Print / Save PDF**.
+
+Kekkai-owned titles, descriptions, impact and recommendations follow the selected language, including when reopening older reports. Original scanner messages, identifiers and AI-produced prose are preserved in their original language; upstream messages and solutions remain available in the technical details.
 
 Sanitization removes known secret forms, source/evidence fields and matching content where supported. **Reports still contain project paths, dependency names, policy, endpoints and findings. Review them before sharing.** No detector can guarantee that all sensitive information has been removed. Gitleaks custom rules/allowlists affect coverage.
 

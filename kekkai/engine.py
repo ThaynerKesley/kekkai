@@ -11,7 +11,7 @@ from typing import Any
 from urllib.parse import urlparse, urlunparse
 
 
-from kekkai.i18n import tr, TranslatedLabels
+from kekkai.i18n import tr, TranslatedLabels, translate, get_language
 
 
 SCANNER_ORDER = ("semgrep", "gitleaks", "sca", "yara", "owasp", "zap", "ai")
@@ -33,14 +33,14 @@ STATUS_LABELS = {
     "skipped": "SKIPPED",
 }
 RESULT_LABELS = TranslatedLabels({
-    "approved": tr("APROVADO"),
-    "blocked": tr("BLOQUEADO"),
-    "error": tr("ERRO"),
+    "approved": "APROVADO",
+    "blocked": "BLOQUEADO",
+    "error": "ERRO",
 })
 RESULT_MESSAGES = TranslatedLabels({
-    "approved": tr("Nenhum problema configurado como bloqueante foi identificado."),
-    "blocked": tr("Foram identificados problemas que precisam ser corrigidos antes da publicação."),
-    "error": tr("Uma ou mais verificações de segurança não puderam ser concluídas."),
+    "approved": "Nenhum problema configurado como bloqueante foi identificado.",
+    "blocked": "Foram identificados problemas que precisam ser corrigidos antes da publicação.",
+    "error": "Uma ou mais verificações de segurança não puderam ser concluídas.",
 })
 SEVERITY_RANK = {
     "CRITICAL": 0,
@@ -298,52 +298,67 @@ def prepare_output_dirs(
     return {"root": root, "reports": reports, "raw": raw, "dashboard": dashboard}
 
 
-def executive_copy(scanner: str, technical: dict, plain_message: str) -> dict[str, str]:
+def executive_copy(scanner: str, technical: dict, plain_message: str, *, language: str | None = None) -> dict[str, str]:
+    def text(message, **values):
+        return translate(message, language or get_language()).format(**values)
+
+    if scanner in {"trivy", "sca"} and "license" in technical:
+        return {
+            "title": text("Licença: ") + str(technical["license"]),
+            "description": text("Classificação da ferramenta: ") + str(technical.get("classification", "Unknown")) + text(". Indicação de risco; não é parecer jurídico."),
+            "impact": text("Obrigações e permissões dependem do contexto de uso e distribuição."),
+            "recommendation": text("Validar a licença conforme a política da organização."),
+        }
+    if scanner == "yara":
+        return {
+            "title": "YARA Rules: " + str(technical.get("rule", "")),
+            "description": text("O arquivo corresponde à regra. Isso é um sinal para investigação, não confirmação automática de malware. Conteúdo do match omitido."),
+            "impact": text("O match exige investigação do arquivo e do contexto da regra."),
+            "recommendation": text("Revisar o arquivo e a regra correspondente."),
+        }
     if scanner in {"trivy", "sca"}:
-        package = technical.get("package") or tr("uma dependência")
-        severity = str(technical.get("severity") or "conhecida").lower()
+        package = technical.get("package") or text("uma dependência")
+        severity = text({"CRITICAL": "crítica", "HIGH": "alta", "MEDIUM": "média", "LOW": "baixa",
+                         "UNKNOWN": "desconhecida", "INFO": "informativa"}.get(str(technical.get("severity")).upper(), "conhecida"))
         fixed = technical.get("fixed_version") or ""
         if fixed:
-            recommendation = tr('Atualizar {v0} para a versão {v1}.', v0=package, v1=fixed)
+            recommendation = text('Atualizar {v0} para a versão {v1}.', v0=package, v1=fixed)
         else:
-            recommendation = tr('Atualizar {v0} para uma versão corrigida.', v0=package)
+            recommendation = text('Atualizar {v0} para uma versão corrigida.', v0=package)
         return {
-            "title": tr("Dependência vulnerável"),
+            "title": text("Dependência vulnerável"),
             "description": (
-                tr('O projeto utiliza uma versão de {v0} com uma vulnerabilidade conhecida de severidade {v1}.', v0=package, v1=severity)
+                text('O projeto utiliza uma versão de {v0} com uma vulnerabilidade conhecida de severidade {v1}.', v0=package, v1=severity)
             ),
-            "impact": tr("Essa falha pode afetar a disponibilidade ou a segurança da aplicação."),
+            "impact": text("Essa falha pode afetar a disponibilidade ou a segurança da aplicação."),
             "recommendation": recommendation,
         }
     if scanner == "gitleaks":
         return {
-            "title": "Segredo exposto no projeto",
+            "title": text("Segredo exposto no projeto"),
             "description": (
-                tr("Foi encontrado um possível segredo no código ou em um arquivo do projeto. "
+                text("Foi encontrado um possível segredo no código ou em um arquivo do projeto. "
                 "O valor foi ocultado neste relatório.")
             ),
-            "impact": "Credenciais expostas podem permitir acesso indevido a sistemas e dados.",
+            "impact": text("Credenciais expostas podem permitir acesso indevido a sistemas e dados."),
             "recommendation": (
-                tr("Remover o segredo do projeto, rotacionar a credencial e passar a "
+                text("Remover o segredo do projeto, rotacionar a credencial e passar a "
                 "guardá-la fora do código.")
             ),
         }
     if scanner == "zap":
-        name = technical.get("alert") or tr("um alerta de segurança")
-        solution = shorten(strip_html(technical.get("solution") or ""), 500)
         return {
-            "title": tr("Risco na aplicação web"),
-            "description": tr('A aplicação apresentou o alerta "{v0}".', v0=name),
-            "impact": tr("Esse ponto pode indicar uma configuração insegura ou um comportamento abusável."),
-            "recommendation": solution or tr("Aplicar a correção recomendada para este alerta."),
+            "title": text("Risco na aplicação web"),
+            "description": text("A aplicação apresentou um alerta de segurança. Consulte o alerta original nos detalhes técnicos."),
+            "impact": text("Esse ponto pode indicar uma configuração insegura ou um comportamento abusável."),
+            "recommendation": text("Aplicar a correção recomendada para este alerta. Consulte a solução original nos detalhes técnicos."),
         }
-    message = shorten(plain_message, 360)
-    rule_id = technical.get("check_id") or "indicada"
+    rule_id = technical.get("check_id") or text("indicada")
     return {
-        "title": tr("Possível problema no código"),
-        "description": message or tr("O scanner encontrou um trecho de código que merece revisão."),
-        "impact": tr("O trecho indicado pode introduzir uma falha se chegar à publicação."),
-        "recommendation": f"Revisar o trecho apontado e corrigir conforme a regra {rule_id}.",
+        "title": text("Possível problema no código"),
+        "description": text("O scanner identificou um possível problema na regra {v0}. Consulte a mensagem original nos detalhes técnicos.", v0=rule_id),
+        "impact": text("O trecho indicado pode introduzir uma falha se chegar à publicação."),
+        "recommendation": text("Revisar o trecho apontado e corrigir conforme a regra {v0}.", v0=rule_id),
     }
 
 
@@ -748,6 +763,7 @@ def build_summary(config: dict, target: Path, project_name: str, results: list[d
                          "blocking_findings": version_info.get("blocking", sca_info["blocking_findings"])}
     return {
         "project": project_name,
+        "language": get_language(),
         "target": str(target),
         "zap_target": config["policy"]["zap"].get("target") or "",
         "timestamp": datetime.now().astimezone().isoformat(timespec="seconds"),

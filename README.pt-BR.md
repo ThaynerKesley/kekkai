@@ -80,7 +80,7 @@ O pacote do aplicativo é `kekkai`. Tanto `python kekkai.py` quanto `python -m k
 1. Abra o projeto no desktop e escolha **Código local / não web** ou **Aplicação web**. Projetos importados sem essa informação solicitam a escolha.
 2. Revise **Scanners**, exclusões e policies. Projetos novos no desktop começam com verificações estáticas; um YAML existente tem precedência.
 3. Instale o **Core** em **YARA Rules**, ou importe suas regras, e habilite o scanner YARA quando desejar.
-4. Execute **Quick** para verificações estáticas ou **Full** para os scanners selecionados. IA sempre exige solicitação e confirmação separadas.
+4. Use **Quick scan** ou **Full scan** na visão geral para abrir a aba Scan com esse perfil. Termine de configurar o projeto e os scanners e clique em **START**. Esses atalhos nunca iniciam a análise. IA sempre exige solicitação e confirmação separadas.
 5. Analise findings, cobertura parcial e diagnósticos. Salve explicitamente a configuração do projeto para gravá-la no YAML.
 
 Use **Salvar configuração** na GUI para gravar `.kekkai.yml` dentro do projeto selecionado. Para preparar uma configuração, copie o exemplo revisado:
@@ -98,6 +98,8 @@ O exemplo completo está em [`.kekkai.example.yml`](.kekkai.example.yml). Nunca 
 - Os estados internos são `pass`, `warn`, `fail`, `error` e `skipped`. A interface apresenta `fail` como **COMPLETED WITH ERROR**, preservando o bloqueio da policy.
 - O resultado geral é `approved`, `blocked` por policy ou `error` técnico. Erros técnicos têm precedência. Avisos e verificações puladas não bloqueiam sozinhos. Esses resultados pertencem ao relatório; fechar a GUI não retorna um código de resultado do scan.
 - Uma falha não cancela os demais scanners. Warnings isolados de parsing preservam findings disponíveis e indicam cobertura parcial. Considere verificações parciais/puladas ao interpretar uma aprovação.
+
+Projetos recentes podem ser removidos em **Projetos → Remover dos recentes**. A ação altera apenas a lista local de atalhos; remover o projeto ativo mantém ele aberto e preserva seus arquivos e relatórios.
 
 ## Configuração
 
@@ -163,7 +165,13 @@ Saída padrão dentro do projeto:
   history/<timestamp-id>/      # Snapshots desktop; raw fica diretamente nesta pasta
 ```
 
-O desktop lista resultado atual e histórico, abre summary/raw/dashboard, exporta ZIP e exclui relatórios selecionados após confirmação. Excluir o atual não apaga históricos separados; excluir um snapshot preserva outras execuções, source e cache. Execuções concluídas pela GUI arquivam os resultados no histórico local.
+O desktop lista o resultado atual e o histórico. Selecione uma execução em **Relatórios** para abrir a dashboard no Kekkai ou no navegador padrão, exportar um **HTML** independente, gerar um **PDF**, abrir summary/raw, exportar ZIP ou excluir o relatório após confirmação. Excluir o atual não apaga históricos separados; excluir um snapshot preserva outras execuções, source e cache. Execuções concluídas pela GUI arquivam os resultados no histórico local.
+
+Na aba Scan, **Abrir dashboard ao concluir** permite escolher **Kekkai** ou **Navegador**. Salve o visualizador padrão em **Configurações → Abrir relatório em**.
+
+Os relatórios HTML/no navegador usam a dashboard Kekkai com identidade visual, gráficos, busca, filtros, agrupamento, detalhes técnicos e temas claro/escuro. O HTML é autocontido e funciona sem servidor ou internet. As ações de exportação também ficam acima da dashboard integrada. O PDF usa um layout A4 claro separado e inclui todos os findings e detalhes técnicos, independentemente dos filtros da tela. A exportação não altera a dashboard aberta. No navegador também há **Imprimir / Salvar PDF**.
+
+Títulos, descrições, impacto e recomendações gerados pelo Kekkai acompanham o idioma selecionado, inclusive ao reabrir relatórios antigos. Mensagens originais dos scanners, identificadores e textos produzidos pela IA preservam seu idioma original; mensagens e soluções das ferramentas ficam disponíveis nos detalhes técnicos.
 
 A sanitização remove formas conhecidas de secrets, campos de source/evidência e conteúdo correspondente quando suportado. **Relatórios ainda contêm paths de projetos, dependências, policies, endpoints e findings. Revise antes de compartilhar.** Nenhum detector garante a remoção de toda informação sensível. Regras customizadas/allowlists do Gitleaks afetam a cobertura.
 
