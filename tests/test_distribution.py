@@ -22,12 +22,24 @@ class DistributionTests(unittest.TestCase):
                 "kekkai/assets/screenshot.png", "kekkai/gui/.env",
                 "kekkai/gui/credentials.json", "kekkai/gui/__pycache__/window.pyc",
                 "tests/personal-notes.md",
+                "kekkai/skins/retro/.env", "kekkai/skins/violet/screenshot.png",
+                "kekkai/skins/hardware/.env", "kekkai/skins/hardware/screenshot.png",
+                "kekkai/skins/monochrome-crt/.env", "kekkai/skins/monochrome-crt/screenshot.png",
+                "kekkai/staging.py", "tests/test_staging.py", "start-staging.pyw",
+                "kekkai-stage/kekkai/engine.py", ".stage-data/desktop/preferences.json",
             ]
             publishable = [
                 "README.md", "LICENSE", "requirements.txt", ".kekkai.example.yml",
                 "kekkai.py", "kekkai/engine.py", "kekkai/gui/window.py",
                 "kekkai/assets/logo.png", "kekkai/assets/logo+nome.png",
                 "tests/test_distribution.py",
+                "kekkai/skins/__init__.py", "kekkai/skins/retro/tokens.json",
+                "kekkai/skins/retro/desktop.qss", "kekkai/skins/violet/tokens.json",
+                "kekkai/skins/violet/desktop.qss", "kekkai/assets/Logo Kekkai retro.png",
+                "kekkai/skins/hardware/tokens.json", "kekkai/skins/hardware/desktop.qss",
+                "kekkai/assets/logo-hardware.png",
+                "kekkai/skins/monochrome-crt/tokens.json", "kekkai/skins/monochrome-crt/desktop.qss",
+                "kekkai/assets/logo-monochrome-crt.png",
             ]
             for relative in private + publishable:
                 with self.subTest(path=relative):

@@ -12,6 +12,7 @@ import yaml
 from ..configuration import DEFAULTS, merge, validate
 from ..files import Sanitizer, is_link, atomic_write_text, atomic_write_bytes, safe_directory
 from ..i18n import LANGUAGES
+from ..skins import DEFAULT_SKIN, SKINS
 
 
 def user_data_dir() -> Path:
@@ -22,7 +23,7 @@ def user_data_dir() -> Path:
 class Preferences:
     def __init__(self, path: Path | None = None):
         self.path = path or user_data_dir() / "preferences.json"
-        self.data = {"theme": "dark", "language": "pt_BR", "default_directory": str(Path.cwd()), "open_dashboard": True,
+        self.data = {"theme": "dark", "skin": DEFAULT_SKIN, "language": "pt_BR", "default_directory": str(Path.cwd()), "open_dashboard": True,
                      "recent_projects": [], "scan_defaults": {}, "profiles": {}, "report_viewer": "kekkai"}
         if self.path.is_file():
             try:
@@ -39,7 +40,8 @@ class Preferences:
 
     def validate(self):
         data = self.data
-        valid = (isinstance(data["theme"], str) and isinstance(data["language"], str) and data["language"] in LANGUAGES and isinstance(data["default_directory"], str)
+        valid = (isinstance(data["theme"], str) and isinstance(data["skin"], str) and data["skin"] in SKINS
+                 and isinstance(data["language"], str) and data["language"] in LANGUAGES and isinstance(data["default_directory"], str)
                  and type(data["open_dashboard"]) is bool and isinstance(data["recent_projects"], list)
                  and isinstance(data["report_viewer"], str) and data["report_viewer"] in {"kekkai", "browser"}
                  and all(isinstance(x, str) for x in data["recent_projects"])

@@ -1,7 +1,7 @@
 """Desktop pages: forms and presentation consume a shared configuration model."""
 from pathlib import Path
 
-from PySide6.QtCore import Slot
+from PySide6.QtCore import Slot, QSize, Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QFormLayout, QGridLayout,
     QHBoxLayout, QHeaderView, QLineEdit, QListWidget, QPlainTextEdit, QProgressBar,
@@ -11,7 +11,8 @@ from ..ai_providers import PROVIDER_BASE_URLS
 from ..web_target import is_web_project
 from .. import engine
 from ..themes import tokens
-from .widgets import Card, ScanChart, button, label, scroll_page
+from ..skins import SKINS
+from .widgets import Card, IconTile, ScanChart, StatusBadgeDelegate, button, icon, label, scroll_page
 from ..i18n import tr, LANGUAGES
 
 DESCRIPTIONS = {
@@ -78,36 +79,80 @@ class HomePage(QWidget):
         scroll, _, layout = scroll_page()
         outer.addWidget(scroll)
         self.title = label(tr("Seu workspace de segurança"), "title")
-        layout.addWidget(self.title)
-        layout.addWidget(label(tr("Verificações consistentes. Decisões claras. Seus projetos sob controle."), "muted", wrap=True))
+        self.title.setWordWrap(True)
+        intro = QVBoxLayout()
+        intro.setSpacing(5)
+        intro.addWidget(self.title)
+        intro.addWidget(label(tr("Verificações consistentes. Decisões claras. Seus projetos sob controle."), "muted", wrap=True))
+        layout.addLayout(intro)
+        layout.setSpacing(16)
         metric_row = QGridLayout()
+        metric_row.setHorizontalSpacing(14)
         self.metrics = {}
-        for index, name in enumerate(["Findings", "Bloqueantes", "Tempo total", "Scanners ativos"]):
+        self.metric_tiles = []
+        for index, (name, symbol, tone) in enumerate([
+            ("Findings", "reports", "violet"), ("Bloqueantes", "blocked", "rose"),
+            ("Tempo total", "clock", "blue"), ("Scanners ativos", "radar", "teal"),
+        ]):
             card = Card()
-            card.body.addWidget(label(name, "muted"))
+            card.setMinimumHeight(108)
+            card.body.setContentsMargins(14, 14, 16, 14)
+            metric = QHBoxLayout()
+            metric.setSpacing(12)
+            tile = IconTile(symbol, tone)
+            metric.addWidget(tile)
+            self.metric_tiles.append(tile)
+            text = QVBoxLayout()
+            text.setSpacing(3)
+            caption = label(name, "metric-label")
+            caption.setWordWrap(True)
+            text.addWidget(caption)
             value = label("—", "metric")
-            card.body.addWidget(value)
+            text.addWidget(value)
+            metric.addLayout(text, 1)
+            card.body.addLayout(metric)
             metric_row.addWidget(card, 0, index)
+            metric_row.setColumnStretch(index, 1)
             self.metrics[name] = value
         layout.addLayout(metric_row)
         row = QHBoxLayout()
-        project = Card(tr("Projeto atual"))
-        self.project_name = label(tr("Nenhum projeto"), "heading")
+        row.setSpacing(16)
+        project = Card()
+        project_info = QHBoxLayout()
+        project_info.setSpacing(14)
+        self.project_tile = IconTile("folder", size=74)
+        project_info.addWidget(self.project_tile, 0, Qt.AlignmentFlag.AlignTop)
+        project_text = QVBoxLayout()
+        project_text.setSpacing(6)
+        project_text.addWidget(label(tr("Projeto atual"), "card-title"))
+        self.project_name = label(tr("Nenhum projeto"), "project-name", wrap=True)
         self.project_path = label(tr("Selecione um diretório para começar."), "muted", wrap=True)
-        self.result = label(tr("Nenhum scan executado"), "heading")
-        project.body.addWidget(self.project_name)
-        project.body.addWidget(self.project_path)
+        self.project_path.setMinimumWidth(0)
+        self.project_path.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.result = label(tr("Nenhum scan executado"), "project-result")
+        project_text.addWidget(self.project_name)
+        project_text.addWidget(self.project_path)
+        project_info.addLayout(project_text, 1)
+        project.body.addLayout(project_info)
+        project.body.addStretch()
         project.body.addWidget(self.result)
-        project.body.addWidget(button(tr("Selecionar projeto"), window.choose_project))
+        self.project_button = button(tr("Selecionar projeto"), window.choose_project)
+        project.body.addWidget(self.project_button)
         row.addWidget(project, 3)
         actions = Card(tr("Iniciar uma verificação"))
-        actions.body.addWidget(label(tr("Quick prioriza verificações estáticas. Full inclui todos os scanners configurados. IA exige uma solicitação explícita."), "muted", wrap=True))
-        actions.body.addWidget(button("Quick scan", lambda: window.prepare_scan("quick"), primary=True, name="homeQuick"))
-        actions.body.addWidget(button("Full scan", lambda: window.prepare_scan("full"), name="homeFull"))
-        actions.body.addWidget(button(tr("Abrir dashboard"), window.show_dashboard))
+        actions.body.setContentsMargins(18, 16, 18, 16)
+        actions.body.setSpacing(6)
+        actions.body.addWidget(label(tr("Quick prioriza verificações estáticas. Full inclui todos os scanners configurados. IA exige uma solicitação explícita."), "caption", wrap=True))
+        self.quick_button = button("Quick scan", lambda: window.prepare_scan("quick"), primary=True, name="homeQuick")
+        self.full_button = button("Full scan", lambda: window.prepare_scan("full"), name="homeFull")
+        self.dashboard_button = button(tr("Abrir dashboard"), window.show_dashboard, name="homeDashboard")
+        for action in (self.quick_button, self.full_button, self.dashboard_button):
+            action.setIconSize(QSize(17, 17))
+            actions.body.addWidget(action)
         row.addWidget(actions, 2)
         layout.addLayout(row)
         charts = QHBoxLayout()
+        charts.setSpacing(16)
         self.severity_chart = ScanChart("severity")
         self.performance_chart = ScanChart("performance")
         for title, chart in [(tr("Findings por severidade"), self.severity_chart), (tr("Tempo por scanner"), self.performance_chart)]:
@@ -116,7 +161,15 @@ class HomePage(QWidget):
             charts.addWidget(card)
         layout.addLayout(charts)
         self.scanner_table = table(["Scanner", "Status", "Findings", tr("Tempo"), tr("Diagnóstico")])
-        self.scanner_table.setMinimumHeight(340)
+        self.scanner_table.setMinimumHeight(242)
+        self.scanner_table.setAlternatingRowColors(True)
+        self.scanner_table.verticalHeader().setDefaultSectionSize(38)
+        header = self.scanner_table.horizontalHeader()
+        for column, width in [(0, 150), (1, 142), (2, 85), (3, 82)]:
+            header.setSectionResizeMode(column, QHeaderView.ResizeMode.Interactive)
+            header.resizeSection(column, width)
+        self.status_badges = StatusBadgeDelegate(self.scanner_table)
+        self.scanner_table.setItemDelegateForColumn(1, self.status_badges)
         status_card = Card(tr("Última execução"))
         status_card.body.addWidget(self.scanner_table)
         layout.addWidget(status_card)
@@ -125,6 +178,14 @@ class HomePage(QWidget):
     def refresh(self, target, config, summary, theme, requested_ai=False):
         self.project_name.setText(config.get("project", {}).get("name") or target.name)
         self.project_path.setText(str(target))
+        self.project_path.setToolTip(str(target))
+        for tile in [*self.metric_tiles, self.project_tile]:
+            tile.set_theme(theme)
+        self.quick_button.setIcon(icon("play", tokens(theme)["on-primary"]))
+        self.full_button.setIcon(icon("full_scan", tokens(theme)["text-primary"]))
+        self.dashboard_button.setIcon(icon("dashboard", tokens(theme)["text-primary"]))
+        self.project_button.setIcon(icon("chevron_down", tokens(theme)["text-secondary"]))
+        self.status_badges.theme = theme
         enabled = sum(bool(config["policy"][name]["enabled"]) for name in engine.SCANNER_ORDER if name != "ai")
         enabled += int(requested_ai)
         self.metrics["Scanners ativos"].setText(str(enabled))
@@ -139,6 +200,9 @@ class HomePage(QWidget):
             own = (summary or {}).get("scanners", {}).get(name, {})
             fill_row(self.scanner_table, index, [engine.DISPLAY_NAMES[name], engine.STATUS_LABELS.get(own.get("status"), "—"),
                     own.get("total_findings", "—"), f"{own['duration_seconds']:.1f}s" if "duration_seconds" in own else "—", engine.diagnostic_message(own)])
+            if own:
+                color = tokens(theme)["muted" if own.get("status") == "skipped" else "danger" if own.get("status") == "error" else "success"]
+                self.scanner_table.item(index, 0).setIcon(icon("status_dot", color))
             color_status(self.scanner_table, index, own.get("status"), theme)
         self.severity_chart.update_data(summary, theme)
         self.performance_chart.update_data(summary, theme)
@@ -521,9 +585,18 @@ class SettingsPage(QWidget):
         layout.addWidget(label(tr("Preferências locais e parâmetros do projeto. Credenciais ficam fora dessas configurações."), "muted", wrap=True))
         card = Card(tr("Workspace e aparência"))
         form = QFormLayout()
+        self.skin = QComboBox()
+        self.skin.setObjectName("skinSelector")
+        self.skin.setAccessibleName(tr("Skin"))
+        for identifier, skin in SKINS.items():
+            self.skin.addItem(skin.name, identifier)
+        self.skin.setCurrentIndex(self.skin.findData(window.skin))
+        self.skin.currentIndexChanged.connect(lambda: window.change_skin(self.skin.currentData()))
+        form.addRow(tr("Skin"), self.skin)
+        form.addRow(label(tr("Escolha o visual do Kekkai. A troca de skin é aplicada e salva imediatamente."), "muted", wrap=True))
         self.theme = QComboBox()
-        self.theme.addItem(tr("Escuro · Midnight Violet"), "dark")
-        self.theme.addItem(tr("Claro · Dusty Olive"), "light")
+        self.theme.addItem(tr("Escuro"), "dark")
+        self.theme.addItem(tr("Claro"), "light")
         self.theme.currentIndexChanged.connect(lambda: window.apply_theme(self.theme.currentData()))
         self.language = QComboBox()
         for code, name in LANGUAGES.items():
@@ -589,6 +662,9 @@ class SettingsPage(QWidget):
         layout.addStretch()
 
     def refresh(self, config, preferences):
+        self.skin.blockSignals(True)
+        self.skin.setCurrentIndex(self.skin.findData(preferences["skin"]))
+        self.skin.blockSignals(False)
         self.theme.blockSignals(True)
         self.theme.setCurrentIndex(0 if preferences["theme"] == "dark" else 1)
         self.theme.blockSignals(False)

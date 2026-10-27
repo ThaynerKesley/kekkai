@@ -23,6 +23,7 @@
 !/kekkai/locales/
 !/kekkai/prompts/
 !/kekkai/themes/
+!/kekkai/skins/
 /kekkai/ai/*
 !/kekkai/ai/*.py
 /kekkai/core/*
@@ -32,6 +33,9 @@
 /kekkai/assets/*
 !/kekkai/assets/logo.png
 !/kekkai/assets/logo+nome.png
+!/kekkai/assets/Logo Kekkai retro.png
+!/kekkai/assets/logo-hardware.png
+!/kekkai/assets/logo-monochrome-crt.png
 /kekkai/dashboard/*
 !/kekkai/dashboard/*.py
 !/kekkai/dashboard/styles.css
@@ -42,12 +46,30 @@
 !/kekkai/prompts/security.md
 /kekkai/themes/*
 !/kekkai/themes/__init__.py
-!/kekkai/themes/desktop.qss
-!/kekkai/themes/tokens.json
+/kekkai/skins/*
+!/kekkai/skins/__init__.py
+!/kekkai/skins/retro/
+!/kekkai/skins/violet/
+!/kekkai/skins/hardware/
+!/kekkai/skins/monochrome-crt/
+/kekkai/skins/retro/*
+!/kekkai/skins/retro/tokens.json
+!/kekkai/skins/retro/desktop.qss
+/kekkai/skins/violet/*
+!/kekkai/skins/violet/tokens.json
+!/kekkai/skins/violet/desktop.qss
+/kekkai/skins/hardware/*
+!/kekkai/skins/hardware/tokens.json
+!/kekkai/skins/hardware/desktop.qss
+/kekkai/skins/monochrome-crt/*
+!/kekkai/skins/monochrome-crt/tokens.json
+!/kekkai/skins/monochrome-crt/desktop.qss
 /tests/*
 !/tests/test_*.py
 
 # Defense in depth for sensitive/runtime files anywhere in allowed folders.
+/kekkai/staging.py
+/tests/test_staging.py
 .kekkai.yml
 .security/
 .kekkai/

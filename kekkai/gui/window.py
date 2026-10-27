@@ -4,9 +4,9 @@ from hashlib import sha256
 from pathlib import Path
 
 from PySide6.QtCore import QUrl, QSize, Slot
-from PySide6.QtGui import QDesktopServices, QCloseEvent, QIcon
+from PySide6.QtGui import QDesktopServices, QCloseEvent, QIcon, QColor
 from PySide6.QtWidgets import (QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QFrame,
-    QStackedWidget, QButtonGroup, QLabel, QFileDialog, QMessageBox, QInputDialog)
+    QStackedWidget, QButtonGroup, QLabel, QFileDialog, QMessageBox, QInputDialog, QGraphicsDropShadowEffect)
 
 from .. import configuration
 from .. import engine
@@ -14,10 +14,11 @@ from ..ai.credentials import CredentialError, WindowsCredentialStore
 from ..core.storage import Preferences, ReportStore, save_project_config
 from ..dashboard import render
 from ..themes import tokens
-from .pages import HomePage, ScanPage, ScannersPage, AIReviewPage, SettingsPage, ProjectsPage, ReportsPage, AboutPage
+from ..skins import get_skin, set_skin, stylesheet
+from .pages import HomePage, ScanPage, ScannersPage, AIReviewPage, SettingsPage, ProjectsPage, ReportsPage, AboutPage, color_status
 from .policies import PolicyDialog
 from .report_view import DashboardPage, PdfExport
-from .widgets import button, icon, label, logo, wordmark
+from .widgets import button, icon, label, logo, wordmark, Card, SkinCanvas, hard_shadow
 from .worker import ScanWorker, ProbeWorker, RuleManagerWorker
 from .yara_page import YaraRulesPage
 from ..yara_library import YaraRuleManager,RuleManagerError
@@ -35,6 +36,8 @@ class MainWindow(QMainWindow):
         set_language(language or self.preferences.data['language'])
         self.language = get_language()
         self.theme = self.preferences.data["theme"]
+        self.skin = self.preferences.data["skin"]
+        set_skin(self.skin)
         self.target = (target or Path(self.preferences.data["default_directory"])).resolve()
         self.config = configuration.merge(configuration.DEFAULTS, self.preferences.data["scan_defaults"])
         self.summary = None
@@ -50,19 +53,21 @@ class MainWindow(QMainWindow):
         self.close_after_scan = False
         self.selected_page = "home"
         self.setWindowTitle("Kekkai Desktop")
-        self.resize(1340, 880)
+        self.resize(1420, 980)
         self.setMinimumSize(960, 650)
         self.setWindowIcon(QIcon(logo(self.theme)))
-        root = QWidget()
+        root = SkinCanvas()
+        root.setObjectName("appShell")
         layout = QHBoxLayout(root)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
+        layout.setContentsMargins(16, 16, 20, 20)
+        layout.setSpacing(16)
         self.setCentralWidget(root)
         self.sidebar = QFrame()
         self.sidebar.setObjectName("sidebar")
+        hard_shadow(self.sidebar)
         self.sidebar.setFixedWidth(220)
         sidebar_layout = QVBoxLayout(self.sidebar)
-        sidebar_layout.setContentsMargins(18, 28, 18, 24)
+        sidebar_layout.setContentsMargins(18, 24, 18, 24)
         sidebar_layout.setSpacing(7)
         brand = QHBoxLayout()
         self.brand_logo = QLabel()
@@ -97,17 +102,21 @@ class MainWindow(QMainWindow):
         sidebar_layout.addWidget(self.credit)
         layout.addWidget(self.sidebar)
         workspace = QWidget()
+        workspace.setObjectName("workspace")
         body = QVBoxLayout(workspace)
+        self.workspace_layout = body
         body.setContentsMargins(0, 0, 0, 0)
-        body.setSpacing(0)
+        body.setSpacing(12)
         top = QFrame()
         top.setObjectName("topbar")
+        hard_shadow(top)
         top_layout = QHBoxLayout(top)
         top_layout.setContentsMargins(26, 14, 26, 14)
-        self.header_title = label(tr("Visão geral"), "heading")
+        self.header_title = label(tr("Visão geral"), "card-title")
         self.workspace_label = label(tr("LOCAL · PRONTO"), "muted")
         self.theme_button = button(tr("Tema claro"), self.toggle_theme, name="themeToggle")
         self.select_button = button(tr("Selecionar projeto"), self.choose_project)
+        top.setMinimumHeight(66)
         top_layout.addWidget(self.header_title)
         top_layout.addStretch()
         top_layout.addWidget(self.workspace_label)
@@ -198,7 +207,7 @@ class MainWindow(QMainWindow):
         if directory:
             target = Path(directory)
             try:
-                imported = configuration.load(target) if (target/'.kekkai.yml').is_file() else None
+                imported = configuration.load(target) if (target / ".kekkai.yml").is_file() else None
                 choice = None
                 if imported is None or imported['project'].get('web') is None:
                     choice, accepted = QInputDialog.getItem(self, tr('Tipo de projeto'), tr('Este projeto é uma aplicação web?'), [tr('Código local / não web'), tr('Aplicação web')], 0, False)
@@ -387,19 +396,61 @@ class MainWindow(QMainWindow):
             return
         self.theme = theme
         self.preferences.data["theme"] = theme
-        stylesheet = (Path(__file__).parents[1] / "themes" / "desktop.qss").read_text(encoding="utf-8")
-        for key, value in sorted(tokens(theme).items(), key=lambda item: len(item[0]), reverse=True):
-            stylesheet = stylesheet.replace("@" + key, value)
-        self.setStyleSheet(stylesheet)
+        set_skin(self.skin)
+        skin = get_skin(self.skin)
+        self.setStyleSheet(stylesheet(theme, self.skin))
+        shell = self.centralWidget().layout()
+        if skin.monochrome:
+            margins, gap, workspace_gap = (16, 16, 16, 16), 16, 12
+        elif skin.hardware:
+            margins, gap, workspace_gap = (12, 12, 12, 12), 12, 8
+        elif skin.paper:
+            margins, gap, workspace_gap = (16, 16, 20, 20), 16, 12
+        else:
+            margins, gap, workspace_gap = (2, 2, 2, 2), 0, 0
+        shell.setContentsMargins(*margins)
+        shell.setSpacing(gap)
+        self.workspace_layout.setSpacing(workspace_gap)
+        self.centralWidget().set_theme(theme)
+        for card in self.findChildren(Card):
+            card.set_theme(theme)
+        for shadow in self.findChildren(QGraphicsDropShadowEffect):
+            shadow.setColor(QColor(tokens(theme)["shadow"]))
+            shadow.setEnabled(skin.paper)
         self.brand_logo.setPixmap(logo(theme))
+        self.brand_text.setPixmap(wordmark())
+        self.setWindowIcon(QIcon(logo(theme)))
         self.theme_button.setText(tr("Tema claro") if theme == "dark" else tr("Tema escuro"))
         for name, nav in self.navigation.items():
-            nav.setIcon(icon(name, tokens(theme)["text-primary"]))
+            navigation_icon = icon(name, tokens(theme)["text-primary"])
+            navigation_icon.addPixmap(icon(name, tokens(theme)["on-primary"]).pixmap(48, 48),
+                                      QIcon.Mode.Normal, QIcon.State.On)
+            nav.setIcon(navigation_icon)
         self.pages["home"].refresh(self.target, self.config, self.summary, theme, self.requested_ai)
+        scan_table = self.scan_page.scanner_table
+        for row in range(scan_table.rowCount()):
+            status = scan_table.item(row, 1)
+            if status is not None:
+                color_status(scan_table, row, "skipped" if status.text() == engine.STATUS_LABELS["skipped"] else None, theme)
+            diagnostic = scan_table.item(row, 4)
+            if diagnostic is not None:
+                diagnostic.setForeground(QColor(tokens(theme)["warning"]))
         self.pages["dashboard"].set_theme(theme)
         self.settings_page.theme.blockSignals(True)
         self.settings_page.theme.setCurrentIndex(0 if theme == "dark" else 1)
         self.settings_page.theme.blockSignals(False)
+        self.settings_page.skin.blockSignals(True)
+        self.settings_page.skin.setCurrentIndex(self.settings_page.skin.findData(self.skin))
+        self.settings_page.skin.blockSignals(False)
+
+    def change_skin(self, identifier):
+        self.skin = get_skin(identifier).identifier
+        self.preferences.data["skin"] = self.skin
+        self.apply_theme(self.theme)
+        try:
+            self.preferences.save()
+        except (OSError, ValueError):
+            self.notice(tr("Skin aplicada nesta sessão; não foi possível salvar a preferência."))
 
     def toggle_theme(self):
         self.apply_theme("light" if self.theme == "dark" else "dark")
@@ -754,6 +805,8 @@ class MainWindow(QMainWindow):
             return
         compact = self.width() < 1100
         self.sidebar.setFixedWidth(76 if compact else 220)
+        side_padding = 6 if compact else 18
+        self.sidebar.layout().setContentsMargins(side_padding, 24, side_padding, 24)
         self.brand_text.setVisible(not compact)
         self.brand_logo.setVisible(compact)
         self.sidebar_caption.setVisible(not compact)

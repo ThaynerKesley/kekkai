@@ -123,8 +123,8 @@ class DesktopCoreTests(unittest.TestCase):
             store.export(self.root, destination)
 
     def test_shared_palettes_and_credit(self):
-        self.assertEqual(tokens("dark")["primary"], "#725AC1")
-        self.assertEqual(tokens("light")["primary"], "#73877B")
+        self.assertEqual(tokens("dark")["primary"], "#A7CEC1")
+        self.assertEqual(tokens("light")["primary"], "#A7CEC1")
         html = render({"project": "Fixture"}, "light")
         self.assertIn('data-theme="light"', html)
         self.assertIn("Thayner Kesley", html)
@@ -140,7 +140,8 @@ class DesktopCoreTests(unittest.TestCase):
             return sum(x * w for x, w in zip(values, [.2126, .7152, .0722]))
         for theme in ("light", "dark"):
             palette = tokens(theme)
-            for foreground, background in [("text-primary", "surface"), ("text-secondary", "surface"), ("muted", "surface"), ("on-primary", "primary")]:
+            for foreground, background in [("text-primary", "surface"), ("text-secondary", "surface"), ("muted", "surface"),
+                                            ("on-primary", "primary"), ("on-primary", "primary-bright"), ("on-primary", "primary-end")]:
                 high, low = sorted([luminance(palette[foreground]), luminance(palette[background])], reverse=True)
                 self.assertGreaterEqual((high + .05) / (low + .05), 4.5, (theme, foreground, background))
 

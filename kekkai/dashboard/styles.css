@@ -1,6 +1,6 @@
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
-body { margin: 0; background: var(--background); color: var(--text-primary); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px; line-height: 1.55; }
+body { margin: 0; background: var(--background); color: var(--text-primary); font-family: var(--font-body), system-ui, sans-serif; font-size: 14px; line-height: 1.55; }
 button, input, select { font: inherit; color: inherit; }
 button, a, summary { -webkit-tap-highlight-color: transparent; }
 a { color: var(--text-secondary); text-decoration: none; }
@@ -90,6 +90,20 @@ footer { margin-top: 28px; }
 @media (max-width: 900px) { .embedded .stats { grid-template-columns: repeat(2, 1fr); } .embedded .charts { grid-template-columns: 1fr 1fr; } .embedded .chart-panel:first-child { grid-column: 1/-1; } }
 @media (max-width: 650px) { .embedded .stats, .embedded .charts { grid-template-columns: 1fr; } .embedded .chart-panel:first-child { grid-column: auto; } }
 .report-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+@media screen {
+  html[data-skin="monochrome-crt"] :is(.report-nav a, .theme, .toolbar button, .search, .grouping,
+      .banner, .panel, .card, .stat, .chart-panel, pre) {
+    border: 2px solid var(--border);
+    border-radius: 0;
+    transition: none;
+  }
+  html[data-skin="monochrome-crt"] :is(.banner, .stat:first-child) { background: var(--surface); color: var(--text-primary); }
+  html[data-skin="monochrome-crt"] .stat:first-child span { color: var(--muted); opacity: 1; }
+  html[data-skin="monochrome-crt"] .banner::after { display: none; }
+  html[data-skin="monochrome-crt"] .card:hover { transform: none; }
+  html[data-skin="monochrome-crt"] :is(.chart-text, .chart-value) { font-family: var(--font-body), monospace; }
+  html[data-skin="monochrome-crt"] .brand-image { object-fit: contain; image-rendering: pixelated; }
+}
 @page {
   @bottom-center {
     content: "Kekkai · Thayner Kesley · " counter(page) " / " counter(pages);

@@ -1,13 +1,15 @@
 """Offline report viewer with no persistent browser profile or remote access."""
 from ..i18n import tr
 from pathlib import Path
+import json
 from PySide6.QtCore import QUrl, QTemporaryDir, QDir, QObject, Signal, QTimer, QMarginsF
 from PySide6.QtGui import QPageLayout, QPageSize
 from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile, QWebEngineSettings, QWebEngineUrlRequestInterceptor
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWidgets import QVBoxLayout, QHBoxLayout, QWidget
 
-from ..dashboard import render
+from ..dashboard import render, appearance
+from ..skins import get_skin
 from ..files import atomic_write_bytes
 from .widgets import button
 
@@ -58,6 +60,8 @@ class DashboardPage(QWidget):
         layout.addWidget(self.view)
         self.summary = None
         self.theme = "dark"
+        self.skin = get_skin().identifier
+        self.view.loadFinished.connect(lambda success: self.apply_appearance() if success else None)
         self.temporary = QTemporaryDir(str(Path(QDir.tempPath()) / "kekkai-report-XXXXXX"))
         if not self.temporary.isValid():
             raise OSError(tr("Não foi possível preparar o renderer de relatórios."))
@@ -65,17 +69,38 @@ class DashboardPage(QWidget):
     def show_summary(self, summary, theme, *, language=None):
         self.summary = summary
         self.theme = theme
+        self.skin = get_skin().identifier
         # setHtml has a ~2 MB Chromium URL limit; an offline sanitized HTML file scales to real reports.
         path = Path(self.temporary.path()).resolve() / "report.html"
-        path.write_text(render(summary, theme, embedded=True, language=language), encoding="utf-8")
+        path.write_text(render(summary, theme, embedded=True, language=language, skin=self.skin), encoding="utf-8")
         self.interceptor.allowed_file = str(path)
         self.page.allowed_file = str(path)
         self.view.setUrl(QUrl.fromLocalFile(str(path)))
 
     def set_theme(self, theme):
         self.theme = theme
+        self.skin = get_skin().identifier
         if theme in {"light", "dark"}:
-            self.page.runJavaScript(f'if (window.kekkaiSetTheme) window.kekkaiSetTheme("{theme}");')
+            self.apply_appearance()
+
+    def apply_appearance(self):
+        # Update presentation in place so report filters and the scroll position survive.
+        if self.summary is None:
+            return
+        visual = appearance(self.skin)
+        visual["theme"] = self.theme
+        data = json.dumps(visual).replace("<", "\\u003c")
+        self.page.runJavaScript("""((visual) => {
+            const style = document.querySelector('head style');
+            if (!style || !window.kekkaiSetTheme) return;
+            style.textContent = visual.css;
+            document.documentElement.dataset.skin = visual.skin;
+            const brand = document.querySelector('.brand-image');
+            if (brand) brand.src = visual.wordmark;
+            const favicon = document.querySelector('link[rel="icon"]');
+            if (favicon) favicon.href = visual.icon;
+            window.kekkaiSetTheme(visual.theme);
+        })(""" + data + ");")
 
     def cleanup(self):
         self.view.stop()

@@ -73,6 +73,15 @@ docker info
 
 The application opens a desktop window. Vulnerable dependencies and dummy credentials used by regression tests are created in isolated temporary projects.
 
+## Skins
+
+In **Settings → Workspace and appearance**, select a **Skin**: **Violet**,
+**Retro**, **Hardware**, or **Monochrome CRT**, each with light and dark modes.
+Monochrome CRT uses sage monochrome panels, pixel details and dithered charts.
+Skin changes apply and save immediately;
+the selected skin and its logo also appear in the report viewer and HTML exports.
+The built-in registry, palettes and stylesheets live in `kekkai/skins/`.
+
 ## Choose your language
 
 ```powershell

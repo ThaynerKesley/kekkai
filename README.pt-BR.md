@@ -73,6 +73,15 @@ docker info
 
 O aplicativo abre uma janela desktop. As dependências vulneráveis e credenciais fictícias dos testes são criadas em projetos temporários isolados.
 
+## Skins
+
+Em **Configurações → Workspace e aparência**, selecione uma **Skin**: **Violet**,
+**Retro**, **Hardware** ou **Monochrome CRT**, todas com modos claro e escuro.
+Monochrome CRT usa painéis monocromáticos em verde sálvia, detalhes pixelados e gráficos pontilhados.
+A troca é aplicada e salva na hora;
+a skin e sua logo também aparecem no visualizador de relatórios e nas exportações
+HTML. O registro, as paletas e os estilos ficam em `kekkai/skins/`.
+
 ## Selecionar idioma
 
 ```powershell

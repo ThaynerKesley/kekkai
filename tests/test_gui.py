@@ -311,11 +311,11 @@ class GuiTests(unittest.TestCase):
         self.assertEqual(self.window.theme, "dark")
         QTest.mouseClick(self.window.theme_button, Qt.MouseButton.LeftButton)
         self.assertEqual(self.window.theme, "light")
-        self.assertIn("#F5E4D7", self.window.styleSheet())
+        self.assertIn("#B5D9D3", self.window.styleSheet())
         self.assertEqual(self.window.pages["dashboard"].theme, "light")
         QTest.mouseClick(self.window.theme_button, Qt.MouseButton.LeftButton)
         self.assertEqual(self.window.theme, "dark")
-        self.assertIn("#242038", self.window.styleSheet())
+        self.assertIn("#243B36", self.window.styleSheet())
 
     def test_provider_fields_are_masked_and_config_is_key_free(self):
         for name in ("deepseek", "qwen", "openai", "anthropic"):

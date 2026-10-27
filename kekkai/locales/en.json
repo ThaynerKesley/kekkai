@@ -618,5 +618,12 @@
   "indicada": "reported",
   "Navegador": "Browser",
   "Abrir relatório em": "Open report in",
-  "A verificação não pôde ser concluída. Consulte os eventos do scan.": "The check could not complete. See the scan events."
+  "A verificação não pôde ser concluída. Consulte os eventos do scan.": "The check could not complete. See the scan events.",
+  "Médios": "Medium",
+  "Baixos": "Low",
+  "Skin": "Skin",
+  "Escolha o visual do Kekkai. A troca de skin é aplicada e salva imediatamente.": "Choose Kekkai's appearance. Skin changes apply and save immediately.",
+  "Skin aplicada nesta sessão; não foi possível salvar a preferência.": "Skin applied for this session; the preference could not be saved.",
+  "Escuro": "Dark",
+  "Claro": "Light"
 }
