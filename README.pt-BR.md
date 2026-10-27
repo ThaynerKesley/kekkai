@@ -12,9 +12,9 @@ Criado por **Thayner Kesley**. O Kekkai reúne ferramentas independentes em uma 
 
 ## Vídeo de uso
 
-[![Assista à demonstração de uso do Kekkai no YouTube](https://img.youtube.com/vi/AUUMhQsUFSQ/hqdefault.jpg)](https://youtu.be/AUUMhQsUFSQ)
+Assista à demonstração de uso diretamente no player abaixo.
 
-[Assista à demonstração de uso no YouTube](https://youtu.be/AUUMhQsUFSQ).
+https://github.com/user-attachments/assets/04db24dc-0ab5-4170-8df3-3e8485dfd3ef
 
 ## Funcionalidades
 

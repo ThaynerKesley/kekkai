@@ -12,9 +12,9 @@ Created by **Thayner Kesley**. Kekkai brings independent security tools into a P
 
 ## Usage video
 
-[![Watch the Kekkai usage walkthrough on YouTube](https://img.youtube.com/vi/AUUMhQsUFSQ/hqdefault.jpg)](https://youtu.be/AUUMhQsUFSQ)
+Watch the usage walkthrough directly in the player below.
 
-[Watch the usage walkthrough on YouTube](https://youtu.be/AUUMhQsUFSQ).
+https://github.com/user-attachments/assets/04db24dc-0ab5-4170-8df3-3e8485dfd3ef
 
 ## What it does
 
